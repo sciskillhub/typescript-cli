@@ -1,0 +1,7 @@
+[test]
+root = "./tests"
+preload = []
+suppress-stack-trace = false
+coverage = true
+coverageThreshold = 0.1
+coverageSkipTestFiles = true

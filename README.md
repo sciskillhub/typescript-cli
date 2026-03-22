@@ -14,8 +14,8 @@ npx @sciskillhub/cli list skill --subject life-science
 # 2. Filter by tag
 npx @sciskillhub/cli list skill --subject life-science --tag "single cell"
 
-# 3. Install AnnData to Claude
-npx @sciskillhub/cli install open-source/K-Dense-AI/claude-scientific-skills/scientific-skills/anndata --agent claude -y
+# 3. Install AnnData to Claude (use short name!)
+npx @sciskillhub/cli install anndata --platform claude -y
 
 # 4. Now Claude can help you analyze .h5ad files!
 ```
@@ -25,7 +25,7 @@ npx @sciskillhub/cli install open-source/K-Dense-AI/claude-scientific-skills/sci
 ### Option 1: Using npx (Recommended) ⭐
 
 ```bash
-npx @sciskillhub/cli install <skill-slug> --agent claude
+npx @sciskillhub/cli install <skill-slug> --platform claude
 ```
 
 **Pros:** No installation, always latest version, works immediately
@@ -36,7 +36,7 @@ npx @sciskillhub/cli install <skill-slug> --agent claude
 npm install -g @sciskillhub/cli
 
 # Use shorter command
-sciskillhub install <skill-slug> --agent claude
+sciskillhub install <skill-slug> --platform claude
 ```
 
 **Pros:** Faster, works offline, shorter command
@@ -55,10 +55,10 @@ npx @sciskillhub/cli list skill --subject life-science --tag "single cell"
 # Step 3: Search by keywords
 npx @sciskillhub/cli list skill --subject life-science --query "embedding"
 
-# Step 4: Install core tools
-npx @sciskillhub/cli install open-source/K-Dense-AI/claude-scientific-skills/scientific-skills/anndata --agent claude -y
-npx @sciskillhub/cli install open-source/K-Dense-AI/claude-scientific-skills/scientific-skills/scanpy --agent claude -y
-npx @sciskillhub/cli install open-source/K-Dense-AI/claude-scientific-skills/scientific-skills/scvi-tools --agent claude -y
+# Step 4: Install core tools (use short names!)
+npx @sciskillhub/cli install anndata --platform claude -y
+npx @sciskillhub/cli install scanpy --platform claude -y
+npx @sciskillhub/cli install scvi-tools --platform claude -y
 
 # Step 5: Use the skills in Claude
 # Prompt: "Help me analyze this h5ad file with scanpy"
@@ -92,9 +92,11 @@ npx @sciskillhub/cli install open-source/K-Dense-AI/claude-scientific-skills/sci
 
 | Command | Description |
 |---------|-------------|
-| `install <skill> --agent <name>` | Install skill to AI agent |
+| `install <skill> --platform <name>` | Install skill to AI agent |
 
-**Supported Agents:** `claude`, `cursor`, `codex`, `gemini`, `copilot`, `windsurf`, `cline`, `roo`, `opencode`
+**Smart Search:** Use short names like `anndata`, `scanpy`, `scvi-tools`. If multiple skills match, you'll be prompted to choose.
+
+**Supported Platforms:** `claude`, `cursor`, `codex`, `gemini`, `copilot`, `windsurf`, `cline`, `roo`, `opencode`
 
 ### Management
 
@@ -129,13 +131,13 @@ npx @sciskillhub/cli list tag --subject life-science --limit 10
 
 ```bash
 # Install to Claude (personal)
-npx @sciskillhub/cli install <skill-slug> --agent claude -y
+npx @sciskillhub/cli install <skill-slug> --platform claude -y
 
 # Install to Cursor (project-specific)
-npx @sciskillhub/cli install <skill-slug> --agent cursor --project
+npx @sciskillhub/cli install <skill-slug> --platform cursor --project
 
 # Install with custom directory
-npx @sciskillhub/cli install <skill-slug> --agent claude -d /path/to/skills
+npx @sciskillhub/cli install <skill-slug> --platform claude -d /path/to/skills
 ```
 
 ## Why SciSkillHub CLI?
