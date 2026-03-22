@@ -1,0 +1,59 @@
+{
+  "name": "@sciskillhub/cli",
+  "version": "0.1.3",
+  "description": "CLI for SciSkillHub - Create, publish, and manage your AI agent skills for science",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "sciskillhub": "./bin/sciskillhub.cjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "science",
+    "sciskillhub",
+    "skillhub",
+    "cli",
+    "ai",
+    "skills",
+    "claude",
+    "mcp",
+    "agents"
+  ],
+  "author": "SciSkillHub",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sciskillhub/typescript-cli"
+  },
+  "homepage": "https://sciskillhub.org",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "chalk": "^5.3.0",
+    "ora": "^8.1.1",
+    "prompts": "^2.4.2",
+    "open": "^10.1.0",
+    "globby": "^14.0.2",
+    "ignore": "^6.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/prompts": "^2.4.9",
+    "@types/diff": "^6.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
