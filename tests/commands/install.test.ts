@@ -92,7 +92,8 @@ describe("supported platforms", () => {
     // These are the platforms that should be supported based on the code
     const expectedPlatforms = [
       "claude", "cursor", "codex", "gemini",
-      "copilot", "windsurf", "cline", "roo", "opencode"
+      "copilot", "windsurf", "cline", "roo", "opencode", "openclaw",
+      "junie", "kiro", "augment", "warp", "goose"
     ];
 
     // Verify they are valid string values
@@ -105,7 +106,8 @@ describe("supported platforms", () => {
   test("platforms have consistent format", () => {
     const expectedPlatforms = [
       "claude", "cursor", "codex", "gemini",
-      "copilot", "windsurf", "cline", "roo", "opencode"
+      "copilot", "windsurf", "cline", "roo", "opencode", "openclaw",
+      "junie", "kiro", "augment", "warp", "goose"
     ];
 
     expectedPlatforms.forEach(platform => {

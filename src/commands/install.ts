@@ -7,10 +7,13 @@
 
 import { Command } from "commander";
 import prompts from "prompts";
-import { existsSync, mkdirSync, writeFileSync, readdirSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from "fs";
 import { join, basename } from "path";
 import { homedir } from "os";
+import { createReadStream } from "fs";
+import { createWriteStream, promises as fsPromises } from "fs";
 import { getClient, UserSkillDetail } from "../lib/api.js";
+import { getApiUrl } from "../lib/config.js";
 import {
   success,
   error,
@@ -77,6 +80,42 @@ const AGENTS = {
     projectPath: ".opencode/skills",
     configFile: "SKILL.md",
   },
+  openclaw: {
+    name: "OpenClaw",
+    personalPath: ".openclaw/skills",
+    projectPath: "skills",
+    configFile: "SKILL.md",
+  },
+  junie: {
+    name: "Junie",
+    personalPath: ".junie/skills",
+    projectPath: ".junie/skills",
+    configFile: "SKILL.md",
+  },
+  kiro: {
+    name: "Kiro",
+    personalPath: ".kiro/skills",
+    projectPath: ".kiro/skills",
+    configFile: "SKILL.md",
+  },
+  augment: {
+    name: "Augment Code",
+    personalPath: ".augment/skills",
+    projectPath: ".augment/skills",
+    configFile: "SKILL.md",
+  },
+  warp: {
+    name: "Warp",
+    personalPath: ".warp/skills",
+    projectPath: ".warp/skills",
+    configFile: "SKILL.md",
+  },
+  goose: {
+    name: "Goose",
+    personalPath: ".config/goose/skills",
+    projectPath: ".config/goose/skills",
+    configFile: "SKILL.md",
+  },
 } as const;
 
 type AgentKey = keyof typeof AGENTS;
@@ -87,7 +126,10 @@ export function registerInstallCommand(program: Command): void {
     .alias("add")
     .alias("i")
     .description("Install a skill to your local agent")
-    .option("-p, --platform <platform>", "Target platform (claude, cursor, codex, gemini, copilot, windsurf, cline, roo, opencode)")
+    .option(
+      "-p, --platform <platform>",
+      "Target platform (claude, cursor, codex, gemini, copilot, windsurf, cline, roo, opencode, openclaw, junie, kiro, augment, warp, goose)"
+    )
     .option("--project", "Install to project directory (default: personal)")
     .option("-d, --dir <path>", "Custom install directory")
     .option("-y, --yes", "Skip confirmation prompts")
@@ -120,58 +162,73 @@ async function installSkill(
 ): Promise<void> {
   const client = getClient();
 
-  let skillDetail: UserSkillDetail;
+  // Track the skill to install
+  let skillSlug: string;
+  let skillName: string;
 
-  // First, try to get skill directly by slug
+  // First, try to install directly by slug (could be full slug path)
   const spin = spinner(`Fetching skill: ${colors.code(skillRef)}`);
 
   try {
-    skillDetail = await client.getPublicSkill(skillRef);
+    // Try the install endpoint directly with the provided ref
+    const installResult = await client.install(skillRef);
     spin.stop();
+    // If successful, we have the files - we need to extract info for display
+    // For now, use the skillRef as the slug and name
+    skillSlug = skillRef;
+    skillName = skillRef.split("/").pop() || skillRef;
   } catch (err) {
-    // If not found, search by name
+    // If not found, search by exact name
     spin.stop();
 
     if (err instanceof Error && err.message.includes("404")) {
-      // Search for skills by name using catalog
+      // Search for skills by exact name match only
       const searchSpin = spinner(`Searching for "${colors.code(skillRef)}"...`);
-      const searchResults = await client.listCatalogSkills({
+      const allResults = await client.listCatalogSkills({
         query: skillRef,
-        limit: 10,
+        limit: 100,
       });
+
+      // Filter to only exact name matches (case-insensitive)
+      const exactMatches = allResults.filter(
+        skill => skill.name.toLowerCase() === skillRef.toLowerCase()
+      );
       searchSpin.stop();
 
-      if (searchResults.length === 0) {
-        error(`No skills found matching: ${skillRef}`);
+      if (exactMatches.length === 0) {
+        error(`No skills found with name: ${skillRef}`);
         console.log();
-        info("Try searching for skills:");
+        info("The install command requires an exact skill name match.");
+        info("To search for skills, use:");
         console.log(`  ${colors.code("sciskillhub list skill --query <query>")}`);
+        console.log();
+        info(`To install by full slug, use the complete slug path.`);
         process.exit(1);
       }
 
-      if (searchResults.length === 1) {
+      let selectedSkill: typeof exactMatches[0];
+
+      if (exactMatches.length === 1) {
         // Only one result, use it
-        const found = searchResults[0];
-        const fetchSpin = spinner(`Found: ${colors.bold(found.name)}`);
-        skillDetail = await client.getPublicSkill(found.slug);
-        fetchSpin.stop();
+        selectedSkill = exactMatches[0];
       } else {
-        // Multiple results, let user choose
+        // Multiple results with same name, let user choose
         if (options.yes) {
-          error(`Multiple skills found matching "${skillRef}". Please be more specific or run without -y flag to choose.`);
+          error(`Multiple skills found with name "${skillRef}". Please run without -y flag to choose.`);
           console.log();
-          for (const result of searchResults) {
-            console.log(`  ${colors.code(result.slug)}`);
+          for (const result of exactMatches) {
+            const shortSlug = result.slug.split("/").slice(-2).join("/");
+            console.log(`  ${colors.code(shortSlug)}`);
             console.log(`    ${result.name}${result.description ? `: ${result.description}` : ""}`);
           }
           process.exit(1);
         }
 
         console.log();
-        console.log(colors.bold(`Found ${searchResults.length} skills matching "${skillRef}":`));
+        console.log(colors.bold(`Found ${exactMatches.length} skills with name "${skillRef}":`));
         console.log();
 
-        const choices = searchResults.map((skill) => {
+        const choices = exactMatches.map((skill) => {
           const shortSlug = skill.slug.split("/").slice(-2).join("/");
           return {
             title: skill.name,
@@ -193,17 +250,15 @@ async function installSkill(
           },
         });
 
-        const fetchSpin = spinner(`Fetching skill: ${colors.code(selectedSlug)}`);
-        skillDetail = await client.getPublicSkill(selectedSlug);
-        fetchSpin.stop();
+        selectedSkill = exactMatches.find(s => s.slug === selectedSlug)!;
       }
+
+      skillSlug = selectedSkill.slug;
+      skillName = selectedSkill.name;
     } else {
       throw err;
     }
   }
-
-  const skillName = skillDetail.name;
-  const skillSlug = skillDetail.slug;
 
   console.log();
   console.log(colors.bold(`📦 ${skillName}`));
@@ -321,24 +376,58 @@ async function installSkill(
     }
   }
 
-  // Get skill content from the detail we already fetched
+  // Get skill content from the download endpoint (returns ZIP file)
   const installSpin = spinner("Downloading skill content...");
 
-  const content = skillDetail.skill_md_raw;
+  const apiUrl = getApiUrl();
+  const downloadUrl = `${apiUrl}/download/${skillSlug}`;
 
-  installSpin.stop();
-
-  if (!content) {
-    error("Skill content is not available.");
+  let zipBuffer: Buffer;
+  try {
+    const response = await fetch(downloadUrl);
+    if (!response.ok) {
+      installSpin.stop();
+      error(`Failed to download skill: ${response.status} ${response.statusText}`);
+      process.exit(1);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    zipBuffer = Buffer.from(arrayBuffer);
+  } catch (err) {
+    installSpin.stop();
+    if (err instanceof Error) {
+      error(`Failed to download skill: ${err.message}`);
+    } else {
+      error("Failed to download skill.");
+    }
     process.exit(1);
   }
 
-  // Create directories
+  installSpin.stop();
+
+  // Extract ZIP file to skill directory
+  const extractSpin = spinner("Extracting skill files...");
+
+  const { execSync } = await import("child_process");
+  const tmpZipPath = join(process.cwd(), `.tmp_skill_${Date.now()}.zip`);
+  writeFileSync(tmpZipPath, zipBuffer);
+
+  // Create skill directory
   mkdirSync(skillDir, { recursive: true });
 
-  // Write SKILL.md
-  const skillFilePath = join(skillDir, AGENTS[targetPlatform].configFile);
-  writeFileSync(skillFilePath, content);
+  // Extract ZIP to skill directory
+  try {
+    execSync(`unzip -o "${tmpZipPath}" -d "${skillDir}"`, { stdio: "ignore" });
+  } catch (err) {
+    extractSpin.stop();
+    error("Failed to extract skill files. Make sure 'unzip' command is available.");
+    info("Install unzip using: sudo apt-get install unzip (Linux) or brew install unzip (macOS)");
+    process.exit(1);
+  }
+
+  // Clean up temp ZIP file
+  fsPromises.unlink(tmpZipPath).catch(() => {});
+
+  extractSpin.stop();
 
   // Success output
   console.log();

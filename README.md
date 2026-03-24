@@ -1,6 +1,6 @@
 # @sciskillhub/cli
 
-> **One-command install for AI agent skills** - Install skills to Claude, Cursor, Codex, and 6+ more agents instantly
+> **One-command install for AI agent skills** - Install skills to Claude, Cursor, Codex, and 7+ more agents instantly
 
 [![npm version](https://img.shields.io/npm/v/@sciskillhub/cli.svg)](https://www.npmjs.com/package/@sciskillhub/cli)
 [![npm downloads](https://img.shields.io/npm/dm/@sciskillhub/cli.svg)](https://www.npmjs.com/package/@sciskillhub/cli)
@@ -96,7 +96,7 @@ npx @sciskillhub/cli install scvi-tools --platform claude -y
 
 **Smart Search:** Use short names like `anndata`, `scanpy`, `scvi-tools`. If multiple skills match, you'll be prompted to choose.
 
-**Supported Platforms:** `claude`, `cursor`, `codex`, `gemini`, `copilot`, `windsurf`, `cline`, `roo`, `opencode`
+**Supported Platforms:** `claude`, `cursor`, `codex`, `gemini`, `copilot`, `windsurf`, `cline`, `roo`, `opencode`, `openclaw`, `junie`, `kiro`, `augment`, `warp`, `goose`
 
 ### Management
 
@@ -142,7 +142,7 @@ npx @sciskillhub/cli install <skill-slug> --platform claude -d /path/to/skills
 
 ## Why SciSkillHub CLI?
 
-- **One Command, Any Agent** - Install to 9+ AI platforms with the same command
+- **One Command, Any Agent** - Install to 10+ AI platforms with the same command
 - **Smart Filtering** - Browse by subject (学科) and tag (标签)
 - **Science-Focused** - Curated tools for Life Science, Chemistry, Physics
 - **Works Offline** - Install once, use anywhere
