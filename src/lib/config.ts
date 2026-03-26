@@ -13,7 +13,7 @@ const CONFIG_DIR = join(homedir(), ".skillhub");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 const AUTH_FILE = join(CONFIG_DIR, "auth.json");
 const LOCAL_DEV_API_URL = "http://localhost:3002/";
-const LEGACY_REMOTE_API_URL = "https://skillhub.club/api/v1";
+const PROD_API_URL = "https://sciskillhub.org/api/v1";
 
 export interface UserConfig {
   apiUrl: string;
@@ -144,8 +144,9 @@ export function getApiUrl(): string {
   }
 
   const configApiUrl = getConfig().apiUrl;
-  if (!configApiUrl || configApiUrl === LEGACY_REMOTE_API_URL) {
-    return normalizeApiUrl(LOCAL_DEV_API_URL);
+  if (!configApiUrl) {
+    // 默认使用生产环境
+    return normalizeApiUrl(PROD_API_URL);
   }
 
   return normalizeApiUrl(configApiUrl);

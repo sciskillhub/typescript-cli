@@ -14,7 +14,8 @@ export function registerAuthCommands(program: Command): void {
   program
     .command("login")
     .description("Log in to sciskillhub")
-    .action(async () => {
+    .option("--token <token>", "Authenticate with an existing token (headless mode)")
+    .action(async (options) => {
       if (isLoggedIn()) {
         const auth = getAuth();
         info(`Already logged in as ${colors.bold(auth?.user?.username || "unknown")}`);
@@ -22,11 +23,16 @@ export function registerAuthCommands(program: Command): void {
         return;
       }
 
-      info("Opening browser for authentication...");
-      const spin = spinner("Waiting for login...");
+      const useToken = options.token?.trim();
+      if (!useToken) {
+        info("Opening browser for authentication...");
+      }
+      const spin = useToken
+        ? spinner("Verifying token...")
+        : spinner("Waiting for browser login...");
 
       try {
-        const result = await login();
+        const result = await login(useToken);
 
         if (result.success && result.user) {
           spin.stop();
