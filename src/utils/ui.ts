@@ -1,11 +1,15 @@
 /**
  * CLI UI Utilities
- * 
+ *
  * Console output styling and formatting
  */
 
 import chalk from "chalk";
 import ora, { type Ora } from "ora";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../../package.json");
 
 // ============================================
 // Colors & Styling
@@ -184,7 +188,7 @@ export function box(content: string, title?: string): string {
 export function printBanner(): void {
   const banner = `
 ${colors.primary("╭─────────────────────────────────╮")}
-${colors.primary("│")}   ${colors.bold("SkillHub CLI")} ${colors.dim("v0.1.0")}           ${colors.primary("│")}
+${colors.primary("│")}   ${colors.bold("SkillHub CLI")} ${colors.dim(`v${version}`)}           ${colors.primary("│")}
 ${colors.primary("│")}   ${colors.dim("Create & share AI agent skills")} ${colors.primary("│")}
 ${colors.primary("╰─────────────────────────────────╯")}
 `;

@@ -2,13 +2,14 @@
 
 /**
  * SkillHub CLI
- * 
+ *
  * Create, publish, and manage your AI agent skills
- * 
+ *
  * Similar to: npx skills (skills.sh)
  */
 
 import { Command } from "commander";
+import { createRequire } from "module";
 import { registerAuthCommands } from "./commands/auth.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerPushCommand } from "./commands/push.js";
@@ -24,12 +25,15 @@ import { registerRecommendCommand } from "./commands/recommend.js";
 import { registerTopCommand } from "./commands/top.js";
 import { printBanner, colors } from "./utils/ui.js";
 
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
+
 const program = new Command();
 
 program
   .name("skillhub")
   .description("Create, publish, and manage your AI agent skills")
-  .version("0.1.0");
+  .version(version);
 
 // Register all commands
 registerAuthCommands(program);

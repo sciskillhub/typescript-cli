@@ -166,98 +166,130 @@ async function installSkill(
   let skillSlug: string;
   let skillName: string;
 
-  // First, try to install directly by slug (could be full slug path)
-  const spin = spinner(`Fetching skill: ${colors.code(skillRef)}`);
+  // Helper to try installing with different slug formats
+  async function tryInstall(slug: string): Promise<{ success: boolean; slug: string }> {
+    try {
+      await client.install(slug);
+      return { success: true, slug };
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("404")) {
+        return { success: false, slug };
+      }
+      throw err;
+    }
+  }
 
-  try {
-    // Try the install endpoint directly with the provided ref
-    const installResult = await client.install(skillRef);
+  // Generate candidate slugs to try
+  function getCandidateSlugs(ref: string): string[] {
+    const candidates: string[] = [];
+
+    // 1. Full slug as provided
+    candidates.push(ref);
+
+    // 2. Try adding open-source/ prefix (author/path -> open-source/author/path)
+    if (!ref.startsWith("open-source/") && !ref.startsWith("user-")) {
+      candidates.push(`open-source/${ref}`);
+    }
+
+    return candidates;
+  }
+
+  // First, try direct install with candidate slugs
+  const candidates = getCandidateSlugs(skillRef);
+  let foundSlug: string | null = null;
+
+  for (const candidate of candidates) {
+    const spin = spinner(`Trying ${colors.code(candidate)}...`);
+    const result = await tryInstall(candidate);
     spin.stop();
-    // If successful, we have the files - we need to extract info for display
-    // For now, use the skillRef as the slug and name
-    skillSlug = skillRef;
-    skillName = skillRef.split("/").pop() || skillRef;
-  } catch (err) {
-    // If not found, search by exact name
-    spin.stop();
 
-    if (err instanceof Error && err.message.includes("404")) {
-      // Search for skills by exact name match only
-      const searchSpin = spinner(`Searching for "${colors.code(skillRef)}"...`);
-      const allResults = await client.listCatalogSkills({
-        query: skillRef,
-        limit: 100,
-      });
+    if (result.success) {
+      foundSlug = candidate;
+      break;
+    }
+  }
 
-      // Filter to only exact name matches (case-insensitive)
-      const exactMatches = allResults.filter(
-        skill => skill.name.toLowerCase() === skillRef.toLowerCase()
-      );
-      searchSpin.stop();
+  if (foundSlug) {
+    skillSlug = foundSlug;
+    skillName = foundSlug.split("/").pop() || foundSlug;
+  } else {
+    // If direct install failed, search for matching skills
+    const searchSpin = spinner(`Searching for "${colors.code(skillRef)}"...`);
+    const allResults = await client.listCatalogSkills({
+      query: skillRef,
+      limit: 100,
+    });
 
-      if (exactMatches.length === 0) {
-        error(`No skills found with name: ${skillRef}`);
+    // Filter results:
+    // 1. Exact name match, OR
+    // 2. Slug contains the ref (for partial path matching)
+    const refLower = skillRef.toLowerCase();
+    const matches = allResults.filter(skill => {
+      const nameMatch = skill.name.toLowerCase() === refLower;
+      const slugMatch = skill.slug.toLowerCase().includes(refLower);
+      const pathMatch = skill.slug.toLowerCase().endsWith(`/${refLower}`);
+      return nameMatch || slugMatch || pathMatch;
+    });
+
+    searchSpin.stop();
+
+    if (matches.length === 0) {
+      error(`No skills found matching: ${skillRef}`);
+      console.log();
+      info("To search for skills, use:");
+      console.log(`  ${colors.code("sciskillhub search <query>")}`);
+      process.exit(1);
+    }
+
+    let selectedSkill: typeof matches[0];
+
+    if (matches.length === 1) {
+      selectedSkill = matches[0];
+    } else {
+      // Multiple matches, let user choose
+      if (options.yes) {
+        error(`Multiple skills found matching "${skillRef}". Please run without -y flag to choose.`);
         console.log();
-        info("The install command requires an exact skill name match.");
-        info("To search for skills, use:");
-        console.log(`  ${colors.code("sciskillhub list skill --query <query>")}`);
-        console.log();
-        info(`To install by full slug, use the complete slug path.`);
+        for (const result of matches.slice(0, 10)) {
+          console.log(`  ${colors.code(result.slug)}`);
+          console.log(`    ${result.name}${result.description ? `: ${result.description.substring(0, 60)}...` : ""}`);
+        }
         process.exit(1);
       }
 
-      let selectedSkill: typeof exactMatches[0];
+      console.log();
+      console.log(colors.bold(`Found ${matches.length} skills matching "${skillRef}":`));
+      console.log();
 
-      if (exactMatches.length === 1) {
-        // Only one result, use it
-        selectedSkill = exactMatches[0];
-      } else {
-        // Multiple results with same name, let user choose
-        if (options.yes) {
-          error(`Multiple skills found with name "${skillRef}". Please run without -y flag to choose.`);
-          console.log();
-          for (const result of exactMatches) {
-            const shortSlug = result.slug.split("/").slice(-2).join("/");
-            console.log(`  ${colors.code(shortSlug)}`);
-            console.log(`    ${result.name}${result.description ? `: ${result.description}` : ""}`);
-          }
-          process.exit(1);
-        }
+      const choices = matches.slice(0, 20).map((skill) => {
+        const parts = skill.slug.split("/");
+        const author = parts[1] || "";
+        const skillPath = parts.slice(2).join("/") || "";
+        return {
+          title: skill.name,
+          value: skill.slug,
+          description: `${author}/${skillPath}${skill.category ? ` • ${skill.category}` : ""}`,
+        };
+      });
 
-        console.log();
-        console.log(colors.bold(`Found ${exactMatches.length} skills with name "${skillRef}":`));
-        console.log();
+      const { selectedSlug } = await prompts({
+        type: "select",
+        name: "selectedSlug",
+        message: "Select a skill to install:",
+        choices,
+        initial: 0,
+      }, {
+        onCancel: () => {
+          info("Cancelled.");
+          process.exit(0);
+        },
+      });
 
-        const choices = exactMatches.map((skill) => {
-          const shortSlug = skill.slug.split("/").slice(-2).join("/");
-          return {
-            title: skill.name,
-            value: skill.slug,
-            description: `${shortSlug}${skill.category ? ` • ${skill.category}` : ""}`,
-          };
-        });
-
-        const { selectedSlug } = await prompts({
-          type: "select",
-          name: "selectedSlug",
-          message: "Select a skill to install:",
-          choices,
-          initial: 0,
-        }, {
-          onCancel: () => {
-            info("Cancelled.");
-            process.exit(0);
-          },
-        });
-
-        selectedSkill = exactMatches.find(s => s.slug === selectedSlug)!;
-      }
-
-      skillSlug = selectedSkill.slug;
-      skillName = selectedSkill.name;
-    } else {
-      throw err;
+      selectedSkill = matches.find(s => s.slug === selectedSlug)!;
     }
+
+    skillSlug = selectedSkill.slug;
+    skillName = selectedSkill.name;
   }
 
   console.log();
@@ -354,25 +386,71 @@ async function installSkill(
     installPath = join(homedir(), AGENTS[targetPlatform].personalPath);
   }
 
-  // Create skill directory
-  const skillDir = join(installPath, skillSlug);
+  // Create skill directory - use skill name only, not full slug path
+  const skillDirName = skillSlug.split("/").pop() || skillName;
+  const skillDir = join(installPath, skillDirName);
 
   // Check if already exists
   if (existsSync(skillDir)) {
-    if (!options.yes) {
-      const { overwrite } = await prompts({
-        type: "confirm",
-        name: "overwrite",
-        message: `Skill already exists at ${skillDir}. Overwrite?`,
-        initial: false,
-      });
+    // Check if it's the same skill or a different one with same name
+    const existingSkillFile = join(skillDir, AGENTS[targetPlatform].configFile);
+    let isSameSkill = false;
 
-      if (!overwrite) {
-        info("Cancelled.");
-        return;
+    if (existsSync(existingSkillFile)) {
+      try {
+        const content = readFileSync(existingSkillFile, "utf-8");
+        // Check if the file mentions the same slug
+        isSameSkill = content.includes(skillSlug) || content.includes(skillName);
+      } catch {
+        // Can't read file, assume different
+      }
+    }
+
+    if (!options.yes) {
+      if (isSameSkill) {
+        const { overwrite } = await prompts({
+          type: "confirm",
+          name: "overwrite",
+          message: `Skill "${skillName}" already exists. Reinstall?`,
+          initial: false,
+        });
+
+        if (!overwrite) {
+          info("Cancelled.");
+          return;
+        }
+      } else {
+        // Different skill with same name
+        console.log();
+        warn(`A different skill named "${skillName}" already exists at:`);
+        console.log(`  ${colors.dim(skillDir)}`);
+        console.log();
+        console.log(`You are trying to install:`);
+        console.log(`  ${colors.code(skillSlug)}`);
+        console.log();
+
+        const { action } = await prompts({
+          type: "select",
+          name: "action",
+          message: "What would you like to do?",
+          choices: [
+            { title: "Overwrite existing skill", value: "overwrite" },
+            { title: "Cancel installation", value: "cancel" },
+          ],
+          initial: 1,
+        });
+
+        if (action === "cancel") {
+          info("Cancelled.");
+          return;
+        }
       }
     } else {
-      warn(`Overwriting existing skill at ${skillDir}`);
+      if (isSameSkill) {
+        warn(`Reinstalling skill "${skillName}" at ${skillDir}`);
+      } else {
+        warn(`Overwriting different skill "${skillName}" at ${skillDir}`);
+      }
     }
   }
 

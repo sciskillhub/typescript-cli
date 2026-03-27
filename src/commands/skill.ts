@@ -56,29 +56,34 @@ export function registerSkillCommand(program: Command): void {
         }
 
         console.log();
-        console.log(colors.bold("Matching Skills"));
-        if (options.subject) {
-          console.log(colors.dim(`Subject: ${options.subject}`));
-        }
-        if (options.tag) {
-          console.log(colors.dim(`Tag: ${options.tag}`));
-        }
+        console.log(colors.bold(`Found ${skills.length} skills:`));
         console.log();
 
-        const rows = skills.map((skill, idx) => [
-          colors.dim(`${idx + 1}.`),
-          colors.bold(truncate(skill.name, 24)),
-          colors.code(truncate(skill.slug, 52)),
-          truncate(skill.category || "-", 16),
-          truncate((skill.tags || []).join(", ") || "-", 28),
-        ]);
+        // Display as table: Skill Name, Author, Source, Path
+        const rows = skills.map((skill, idx) => {
+          // Parse slug: source/author/path
+          const parts = skill.slug.split("/");
+          const source = parts[0] || "";
+          const author = parts[1] || "";
+          const skillPath = parts.slice(2).join("/") || "";
+
+          return [
+            colors.dim(`${idx + 1}.`),
+            colors.bold(truncate(skill.name, 28)),
+            truncate(author, 20),
+            truncate(source, 12),
+            colors.code(truncate(skillPath, 50)),
+          ];
+        });
 
         console.log(formatTable(rows, {
-          headers: ["#", "Name", "Slug", "Subject", "Tags"],
+          headers: ["#", "Skill Name", "Author", "Source", "Path"],
         }));
 
         console.log();
-        console.log(colors.dim(`Showing ${skills.length} skill(s)`));
+        info(`Install with: ${colors.code("sciskillhub install <author>/<path>")}`);
+        console.log();
+        info(`Example: ${colors.code(`sciskillhub install ${skills[0]?.slug.split("/").slice(1).join("/")} --platform claude`)}`);
         console.log();
       } catch (err) {
         spin?.stop();
@@ -102,6 +107,7 @@ function getLoadingText(query?: string, subject?: string, tag?: string): string 
 }
 
 function truncate(str: string, maxLen: number): string {
+  if (!str) return "-";
   if (str.length <= maxLen) return str;
   return str.substring(0, maxLen - 1) + "…";
 }

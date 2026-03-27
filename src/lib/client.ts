@@ -414,12 +414,18 @@ export class SciSkillHubClient {
     query: string,
     options?: { category?: string; page?: number; perPage?: number; limit?: number }
   ): Promise<UserSkillSummary[]> {
-    const params = new URLSearchParams({ q: query });
-    if (options?.category) params.set("category", options.category);
-    if (options?.page) params.set("page", String(options.page));
-    if (options?.perPage) params.set("per_page", String(options.perPage));
-    if (options?.limit) params.set("limit", String(options.limit));
-    return this.request<UserSkillSummary[]>("GET", `/public/search?${params}`);
+    const body: Record<string, unknown> = {
+      query,
+      limit: options?.limit || 10,
+    };
+    if (options?.category) body.category = options.category;
+
+    const response = await this.request<{ results: UserSkillSummary[] }>(
+      "POST",
+      "/skills/search",
+      body
+    );
+    return response.results || [];
   }
 
   async trending(

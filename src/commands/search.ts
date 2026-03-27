@@ -6,10 +6,10 @@
 
 import { Command } from "commander";
 import { getClient } from "../lib/api.js";
-import { 
-  error, 
-  info, 
-  spinner, 
+import {
+  error,
+  info,
+  spinner,
   colors,
   formatTable,
 } from "../utils/ui.js";
@@ -55,27 +55,37 @@ export function registerSearchCommand(program: Command): void {
         console.log(colors.bold(`Found ${results.length} skill${results.length > 1 ? "s" : ""}:`));
         console.log();
 
-        // Display results
+        // Slug format: source/author/skill-path
+        // Display as table: Skill Name | Author | Source
         const rows = results.map((skill, idx) => {
-          const match = skill.similarity 
+          const parts = skill.slug.split("/");
+          const source = parts[0] || "";
+          const author = parts[1] || "";
+          const skillPath = parts.slice(2).join("/") || "";
+
+          const match = skill.similarity
             ? colors.dim(`${Math.round(skill.similarity * 100)}%`)
             : "";
-          
+
           return [
             colors.dim(`${idx + 1}.`),
-            colors.bold(truncate(skill.name, 25)),
-            colors.code(truncate(skill.slug, 30)),
-            truncate(skill.category || "-", 15),
+            colors.bold(skill.name),
+            colors.code(author),
+            colors.dim(source),
+            skillPath,
             match,
           ];
         });
 
+        console.log();
         console.log(formatTable(rows, {
-          headers: ["#", "Name", "Slug", "Category", "Match"],
+          headers: ["#", "Skill Name", "Author", "Source", "Path", "Match"],
         }));
 
         console.log();
-        info(`Install with: ${colors.code("skillhub install <slug>")}`);
+        info(`Install with: ${colors.code("sciskillhub install <author>/<path>")}`);
+        console.log();
+        info(`Example: ${colors.code(`sciskillhub install ${results[0]?.slug.split("/").slice(1).join("/")} --platform claude`)}`);
         console.log();
 
       } catch (err) {
@@ -84,9 +94,4 @@ export function registerSearchCommand(program: Command): void {
         process.exit(1);
       }
     });
-}
-
-function truncate(str: string, maxLen: number): string {
-  if (str.length <= maxLen) return str;
-  return str.substring(0, maxLen - 1) + "…";
 }

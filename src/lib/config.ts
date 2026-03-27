@@ -44,9 +44,9 @@ function ensureConfigDir(): void {
  */
 export function getConfig(): UserConfig {
   ensureConfigDir();
-  
+
   const defaults: UserConfig = {
-    apiUrl: LOCAL_DEV_API_URL,
+    apiUrl: PROD_API_URL,
     defaultVisibility: "private",
   };
 
