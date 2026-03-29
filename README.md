@@ -1,21 +1,21 @@
-# @sciskillhub/cli
+# sciskillhub
 
-> **One-command install for AI agent skills** - Install skills to Claude, Cursor, Codex, and 7+ more agents instantly
+> **One-command install for AI agent skills** - Install skills to Claude, Cursor, Codex, and 10+ more agents instantly
 
-[![npm version](https://img.shields.io/npm/v/@sciskillhub/cli.svg)](https://www.npmjs.com/package/@sciskillhub/cli)
-[![npm downloads](https://img.shields.io/npm/dm/@sciskillhub/cli.svg)](https://www.npmjs.com/package/@sciskillhub/cli)
+[![npm version](https://img.shields.io/npm/v/sciskillhub.svg)](https://www.npmjs.com/package/sciskillhub)
+[![npm downloads](https://img.shields.io/npm/dm/sciskillhub.svg)](https://www.npmjs.com/package/sciskillhub)
 
 ## Quick Example: Single Cell Analysis
 
 ```bash
-# 1. Browse Life Science skills
-npx @sciskillhub/cli list skill --subject life-science
+# 1. Search for single cell skills
+npx sciskillhub search "single cell"
 
-# 2. Filter by tag
-npx @sciskillhub/cli list skill --subject life-science --tag "single cell"
+# 2. Or browse by subject
+npx sciskillhub list skill --subject life-science
 
-# 3. Install AnnData to Claude (use short name!)
-npx @sciskillhub/cli install anndata --platform claude -y
+# 3. Install AnnData to Claude
+npx sciskillhub install anndata --platform claude -y
 
 # 4. Now Claude can help you analyze .h5ad files!
 ```
@@ -25,7 +25,7 @@ npx @sciskillhub/cli install anndata --platform claude -y
 ### Option 1: Using npx (Recommended) ⭐
 
 ```bash
-npx @sciskillhub/cli install <skill-slug> --platform claude
+npx sciskillhub install <skill-slug> --platform claude
 ```
 
 **Pros:** No installation, always latest version, works immediately
@@ -33,7 +33,7 @@ npx @sciskillhub/cli install <skill-slug> --platform claude
 ### Option 2: Global Installation
 
 ```bash
-npm install -g @sciskillhub/cli
+npm install -g sciskillhub
 
 # Use shorter command
 sciskillhub install <skill-slug> --platform claude
@@ -47,18 +47,18 @@ sciskillhub install <skill-slug> --platform claude
 
 ```bash
 # Step 1: Browse Life Science category
-npx @sciskillhub/cli list skill --subject life-science --limit 20
+npx sciskillhub list skill --subject life-science --limit 20
 
 # Step 2: Filter by tags
-npx @sciskillhub/cli list skill --subject life-science --tag "single cell"
+npx sciskillhub list skill --subject life-science --tag "single cell"
 
 # Step 3: Search by keywords
-npx @sciskillhub/cli list skill --subject life-science --query "embedding"
+npx sciskillhub list skill --subject life-science --query "embedding"
 
 # Step 4: Install core tools (use short names!)
-npx @sciskillhub/cli install anndata --platform claude -y
-npx @sciskillhub/cli install scanpy --platform claude -y
-npx @sciskillhub/cli install scvi-tools --platform claude -y
+npx sciskillhub install anndata --platform claude -y
+npx sciskillhub install scanpy --platform claude -y
+npx sciskillhub install scvi-tools --platform claude -y
 
 # Step 5: Use the skills in Claude
 # Prompt: "Help me analyze this h5ad file with scanpy"
@@ -78,15 +78,19 @@ npx @sciskillhub/cli install scvi-tools --platform claude -y
 
 ## All Commands
 
-### Discovery & Browse
+### Discovery & Search
 
 | Command | Description |
 |---------|-------------|
-| `list subject` | List all subjects (学科) |
+| `search <query>` | Search skills by keywords `(s, find)` |
+| `trending` | Show trending skills `(hot, popular)` |
+| `latest` | Show recently added skills `(new, recent)` |
+| `recommend` | Get personalized recommendations `(rec, suggest)` |
+| `top` | Show all-time leaderboard `(leaderboard, rank)` |
 | `list skill --subject <name>` | Browse skills by subject |
 | `list skill --tag <tag>` | Filter by tag |
-| `list skill --query <text>` | Search by keywords |
 | `list tag --subject <name>` | Show tags in a subject |
+| `list subject` | List all subjects |
 
 ### Install
 
@@ -114,30 +118,34 @@ npx @sciskillhub/cli install scvi-tools --platform claude -y
 ### Discovery Examples
 
 ```bash
-# Browse Life Science skills
-npx @sciskillhub/cli list skill --subject life-science
+# Search by keywords
+npx sciskillhub search "single cell"
+npx sciskillhub search "protein structure"
 
-# Filter by single cell tag
-npx @sciskillhub/cli list skill --subject life-science --tag "single cell"
+# Browse by category
+npx sciskillhub list skill --subject life-science
+npx sciskillhub list skill --tag "genomics"
 
-# Search for embedding tools
-npx @sciskillhub/cli list skill --subject life-science --query "embedding"
+# Discover popular skills
+npx sciskillhub trending --limit 10
+npx sciskillhub top --limit 20
+npx sciskillhub latest --limit 10
 
-# List popular tags
-npx @sciskillhub/cli list tag --subject life-science --limit 10
+# Get personalized recommendations
+npx sciskillhub recommend
 ```
 
 ### Install Examples
 
 ```bash
 # Install to Claude (personal)
-npx @sciskillhub/cli install <skill-slug> --platform claude -y
+npx sciskillhub install <skill-slug> --platform claude -y
 
 # Install to Cursor (project-specific)
-npx @sciskillhub/cli install <skill-slug> --platform cursor --project
+npx sciskillhub install <skill-slug> --platform cursor --project
 
 # Install with custom directory
-npx @sciskillhub/cli install <skill-slug> --platform claude -d /path/to/skills
+npx sciskillhub install <skill-slug> --platform claude -d /path/to/skills
 ```
 
 ## Why SciSkillHub CLI?
@@ -174,7 +182,7 @@ npm run typecheck
 ## Links
 
 - **Website**: https://sciskillhub.org
-- **npm**: https://www.npmjs.com/package/@sciskillhub/cli
+- **npm**: https://www.npmjs.com/package/sciskillhub
 - **GitHub**: https://github.com/sciskillhub/typescript-cli
 
 ## License
