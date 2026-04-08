@@ -1,6 +1,6 @@
 {
   "name": "sciskillhub",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI for SciSkillHub - Create, publish, and manage your AI agent skills for science",
   "type": "module",
   "main": "dist/index.js",

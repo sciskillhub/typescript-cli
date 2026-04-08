@@ -25,7 +25,7 @@ import {
 } from "../utils/ui.js";
 
 // Supported agents with their install paths
-const AGENTS = {
+export const AGENTS = {
   claude: {
     name: "Claude Code",
     personalPath: ".claude/skills",
@@ -118,7 +118,7 @@ const AGENTS = {
   },
 } as const;
 
-type AgentKey = keyof typeof AGENTS;
+export type AgentKey = keyof typeof AGENTS;
 
 export function registerInstallCommand(program: Command): void {
   program
@@ -127,21 +127,20 @@ export function registerInstallCommand(program: Command): void {
     .alias("i")
     .description("Install a skill to your local agent")
     .option(
-      "-p, --platform <platform>",
-      "Target platform (claude, cursor, codex, gemini, copilot, windsurf, cline, roo, opencode, openclaw, junie, kiro, augment, warp, goose)"
+      "-a, --agent <agent>",
+      "Target agent (claude, cursor, codex, gemini, copilot, windsurf, cline, roo, opencode, openclaw, junie, kiro, augment, warp, goose)"
     )
     .option("--project", "Install to project directory (default: personal)")
     .option("-d, --dir <path>", "Custom install directory")
     .option("-y, --yes", "Skip confirmation prompts")
-    .option("--list-platforms", "List all supported platforms")
+    .option("--list-agents", "List all supported agents")
     .action(async (skill: string, options) => {
-      // List platforms
-      if (options.listPlatforms) {
+      if (options.listAgents) {
         console.log();
-        console.log(colors.bold("Supported Platforms:"));
+        console.log(colors.bold("Supported Agents:"));
         console.log();
-        for (const [key, platform] of Object.entries(AGENTS)) {
-          console.log(`  ${colors.code(key.padEnd(12))} ${platform.name}`);
+        for (const [key, agent] of Object.entries(AGENTS)) {
+          console.log(`  ${colors.code(key.padEnd(12))} ${agent.name}`);
         }
         console.log();
         return;
@@ -154,7 +153,7 @@ export function registerInstallCommand(program: Command): void {
 async function installSkill(
   skillRef: string,
   options: {
-    platform?: string;
+    agent?: string;
     project?: boolean;
     dir?: string;
     yes?: boolean;
@@ -297,30 +296,29 @@ async function installSkill(
   console.log(colors.dim(`   ${skillSlug}`));
   console.log();
 
-  // Determine target platform
+  // Determine target agent
   let targetPlatform: AgentKey;
 
-  if (options.platform) {
-    const platform = options.platform.toLowerCase() as AgentKey;
-    if (!AGENTS[platform]) {
-      error(`Unknown platform: ${options.platform}`);
-      console.log(`Supported: ${Object.keys(AGENTS).join(", ")}`);
+  if (options.agent) {
+    const agent = options.agent.toLowerCase() as AgentKey;
+    if (!AGENTS[agent]) {
+      error(`Unknown agent: ${options.agent}`);
+      console.log(`Supported agents: ${Object.keys(AGENTS).join(", ")}`);
       process.exit(1);
     }
-    targetPlatform = platform;
+    targetPlatform = agent;
   } else if (!options.yes) {
-    // Prompt for platform selection
-    const platformChoices = Object.entries(AGENTS).map(([key, platform]) => ({
-      title: `${platform.name}`,
+    const agentChoices = Object.entries(AGENTS).map(([key, agent]) => ({
+      title: `${agent.name}`,
       value: key,
-      description: `Install to ${platform.personalPath}`,
+      description: `Install to ${agent.personalPath}`,
     }));
 
-    const { platform } = await prompts({
+    const { agent } = await prompts({
       type: "select",
-      name: "platform",
-      message: "Select target platform:",
-      choices: platformChoices,
+      name: "agent",
+      message: "Select target agent:",
+      choices: agentChoices,
       initial: 0,
     }, {
       onCancel: () => {
@@ -329,7 +327,7 @@ async function installSkill(
       },
     });
 
-    targetPlatform = platform as AgentKey;
+    targetPlatform = agent as AgentKey;
   } else {
     // Default to claude
     targetPlatform = "claude";

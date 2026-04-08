@@ -15,7 +15,7 @@ npx sciskillhub search "single cell"
 npx sciskillhub list skill --subject life-science
 
 # 3. Install AnnData to Claude
-npx sciskillhub install anndata --platform claude -y
+npx sciskillhub install anndata --agent claude -y
 
 # 4. Now Claude can help you analyze .h5ad files!
 ```
@@ -25,7 +25,7 @@ npx sciskillhub install anndata --platform claude -y
 ### Option 1: Using npx (Recommended) ⭐
 
 ```bash
-npx sciskillhub install <skill-slug> --platform claude
+npx sciskillhub install <skill-slug> --agent claude
 ```
 
 **Pros:** No installation, always latest version, works immediately
@@ -36,7 +36,7 @@ npx sciskillhub install <skill-slug> --platform claude
 npm install -g sciskillhub
 
 # Use shorter command
-sciskillhub install <skill-slug> --platform claude
+sciskillhub install <skill-slug> --agent claude
 ```
 
 **Pros:** Faster, works offline, shorter command
@@ -56,9 +56,9 @@ npx sciskillhub list skill --subject life-science --tag "single cell"
 npx sciskillhub list skill --subject life-science --query "embedding"
 
 # Step 4: Install core tools (use short names!)
-npx sciskillhub install anndata --platform claude -y
-npx sciskillhub install scanpy --platform claude -y
-npx sciskillhub install scvi-tools --platform claude -y
+npx sciskillhub install anndata --agent claude -y
+npx sciskillhub install scanpy --agent claude -y
+npx sciskillhub install scvi-tools --agent claude -y
 
 # Step 5: Use the skills in Claude
 # Prompt: "Help me analyze this h5ad file with scanpy"
@@ -96,11 +96,11 @@ npx sciskillhub install scvi-tools --platform claude -y
 
 | Command | Description |
 |---------|-------------|
-| `install <skill> --platform <name>` | Install skill to AI agent |
+| `install <skill> --agent <name>` | Install skill to AI agent |
 
 **Smart Search:** Use short names like `anndata`, `scanpy`, `scvi-tools`. If multiple skills match, you'll be prompted to choose.
 
-**Supported Platforms:** `claude`, `cursor`, `codex`, `gemini`, `copilot`, `windsurf`, `cline`, `roo`, `opencode`, `openclaw`, `junie`, `kiro`, `augment`, `warp`, `goose`
+**Supported Agents:** `claude`, `cursor`, `codex`, `gemini`, `copilot`, `windsurf`, `cline`, `roo`, `opencode`, `openclaw`, `junie`, `kiro`, `augment`, `warp`, `goose`
 
 ### Management
 
@@ -139,18 +139,18 @@ npx sciskillhub recommend
 
 ```bash
 # Install to Claude (personal)
-npx sciskillhub install <skill-slug> --platform claude -y
+npx sciskillhub install <skill-slug> --agent claude -y
 
 # Install to Cursor (project-specific)
-npx sciskillhub install <skill-slug> --platform cursor --project
+npx sciskillhub install <skill-slug> --agent cursor --project
 
 # Install with custom directory
-npx sciskillhub install <skill-slug> --platform claude -d /path/to/skills
+npx sciskillhub install <skill-slug> --agent claude -d /path/to/skills
 ```
 
 ## Why SciSkillHub CLI?
 
-- **One Command, Any Agent** - Install to 10+ AI platforms with the same command
+- **One Command, Any Agent** - Install to 10+ AI agents with the same command
 - **Smart Filtering** - Browse by subject (学科) and tag (标签)
 - **Science-Focused** - Curated tools for Life Science, Chemistry, Physics
 - **Works Offline** - Install once, use anywhere

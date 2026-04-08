@@ -58,11 +58,11 @@ describe("install command", () => {
     expect(command?.aliases()).toContain("i");
   });
 
-  test("has platform option", () => {
+  test("has agent option", () => {
     const command = program.commands.find((c) => c.name() === "install");
     const options = command?.options || [];
-    const platformOption = options.find((o) => o.long === "--platform");
-    expect(platformOption).toBeDefined();
+    const agentOption = options.find((o) => o.long === "--agent");
+    expect(agentOption).toBeDefined();
   });
 
   test("has project option", () => {
@@ -79,10 +79,10 @@ describe("install command", () => {
     expect(yesOption).toBeDefined();
   });
 
-  test("has list-platforms option", () => {
+  test("has list-agents option", () => {
     const command = program.commands.find((c) => c.name() === "install");
     const options = command?.options || [];
-    const listOption = options.find((o) => o.long === "--list-platforms");
+    const listOption = options.find((o) => o.long === "--list-agents");
     expect(listOption).toBeDefined();
   });
 });

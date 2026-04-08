@@ -23,6 +23,7 @@ import { registerTrendingCommand } from "./commands/trending.js";
 import { registerLatestCommand } from "./commands/latest.js";
 import { registerRecommendCommand } from "./commands/recommend.js";
 import { registerTopCommand } from "./commands/top.js";
+import { registerInspectCommand } from "./commands/inspect.js";
 import { printBanner, colors } from "./utils/ui.js";
 
 const require = createRequire(import.meta.url);
@@ -51,6 +52,7 @@ registerTrendingCommand(program);
 registerLatestCommand(program);
 registerRecommendCommand(program);
 registerTopCommand(program);
+registerInspectCommand(program);
 
 // Default action (no command)
 program.action(() => {
@@ -71,6 +73,7 @@ program.action(() => {
   console.log(`  ${colors.code("push")}       Push local files to remote`);
   console.log(`  ${colors.code("pull")}       Pull remote files to local`);
   console.log(`  ${colors.code("status")}     Show local vs remote status`);
+  console.log(`  ${colors.code("inspect")}    Inspect local skill in current directory`);
   console.log(`  ${colors.code("publish")}    Publish skill to public directory`);
   console.log(`  ${colors.code("list")}       List your skills ${colors.dim("(ls)")}`);
   console.log(`  ${colors.code("list tag")}   List/search popular tags ${colors.dim("(tags)")}`);

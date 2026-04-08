@@ -83,7 +83,7 @@ export function registerSkillCommand(program: Command): void {
         console.log();
         info(`Install with: ${colors.code("sciskillhub install <author>/<path>")}`);
         console.log();
-        info(`Example: ${colors.code(`sciskillhub install ${skills[0]?.slug.split("/").slice(1).join("/")} --platform claude`)}`);
+        info(`Example: ${colors.code(`sciskillhub install ${skills[0]?.slug.split("/").slice(1).join("/")} --agent claude`)}`);
         console.log();
       } catch (err) {
         spin?.stop();
