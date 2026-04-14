@@ -14,8 +14,6 @@ export interface UserSkillSummary {
   slug: string;
   description?: string;
   description_zh?: string;
-  category?: string;
-  tags?: string[];
   visibility: "private" | "unlisted" | "public";
   version: string;
   current_version: string;
@@ -35,8 +33,6 @@ export interface SkillInfo {
   slug: string;
   description?: string;
   description_zh?: string;
-  category?: string;
-  tags?: string[];
   visibility: "private" | "unlisted" | "public";
   status: "draft" | "published" | "unlisted";
 }
@@ -55,8 +51,6 @@ export interface UserSkillDetail {
   slug: string;
   description?: string;
   description_zh?: string;
-  category?: string;
-  tags?: string[];
   visibility: "private" | "unlisted" | "public";
   status: "draft" | "published" | "unlisted";
 }
@@ -74,8 +68,6 @@ export interface CreateSkillInput {
   slug: string;
   description?: string;
   description_zh?: string;
-  category?: string;
-  tags?: string[];
   visibility?: "private" | "unlisted" | "public";
 }
 
@@ -83,8 +75,6 @@ export interface UpdateSkillInput {
   name?: string;
   description?: string;
   description_zh?: string;
-  category?: string;
-  tags?: string[];
   visibility?: "private" | "unlisted" | "public";
 }
 
@@ -93,8 +83,6 @@ export interface PushSkillInput {
   name?: string;
   description?: string;
   description_zh?: string;
-  category?: string;
-  tags?: string[];
   files: Array<{
     filepath: string;
     content: string;
@@ -157,7 +145,10 @@ export interface RollbackResult {
 export interface PublicCatalogOptions {
   sortBy?: string;
   limit?: number;
-  category?: string;
+  object?: string[];
+  stage?: string[];
+  tasks?: string[];
+  domains?: string[];
 }
 
 export interface CountedName {
@@ -181,8 +172,6 @@ export interface StatsResult {
     categories: number;
     lastUpdated: string | null;
   };
-  categories: CountedName[];
-  top_tags: CountedName[];
 }
 
 export interface CatalogListResult {
@@ -191,8 +180,15 @@ export interface CatalogListResult {
     name: string;
     slug: string;
     description?: string;
-    category?: string;
-    tags?: string[] | null;
+    object?: string | null;
+    stage?: string | null;
+    tasks?: string[] | null;
+    domains?: string[] | null;
+    github_stars?: number | null;
+    simple_score?: number | null;
+    simple_rating?: number | string | null;
+    composite_score?: number | null;
+    author?: string;
   }>;
   pagination: {
     total: number;
@@ -399,10 +395,9 @@ export class SciSkillHubClient {
 
   async search(
     query: string,
-    options?: { category?: string; page?: number; perPage?: number; limit?: number }
+    options?: { page?: number; perPage?: number; limit?: number }
   ): Promise<UserSkillSummary[]> {
     const params = new URLSearchParams({ q: query });
-    if (options?.category) params.set("category", options.category);
     if (options?.page) params.set("page", String(options.page));
     if (options?.perPage) params.set("per_page", String(options.perPage));
     if (options?.limit) params.set("limit", String(options.limit));
@@ -412,13 +407,12 @@ export class SciSkillHubClient {
   /** Public search endpoint - returns array of skills */
   async publicSearch(
     query: string,
-    options?: { category?: string; page?: number; perPage?: number; limit?: number }
+    options?: { page?: number; perPage?: number; limit?: number }
   ): Promise<UserSkillSummary[]> {
     const body: Record<string, unknown> = {
       query,
       limit: options?.limit || 10,
     };
-    if (options?.category) body.category = options.category;
 
     const response = await this.request<{ results: UserSkillSummary[] }>(
       "POST",
@@ -446,12 +440,46 @@ export class SciSkillHubClient {
     return this.request<UserSkillSummary[]>("GET", `/public/top?limit=${limit}`);
   }
 
+  /** Get taxonomy options (object, stage, task, domain) */
+  async getTaxonomy(): Promise<{
+    object_options: string[];
+    stage_options: string[];
+    task_options: string[];
+    domain_options: string[];
+  }> {
+    return this.request("GET", "/agent/skills/taxonomy");
+  }
+
+  /** Query tasks by object + stage + domains */
+  async getAgentTasks(options: {
+    object?: string;
+    stage?: string;
+    domains?: string[];
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    object: string;
+    stage: string;
+    domains: string[];
+    page: number;
+    limit: number;
+    total: number;
+    tasks: Array<{ name: string; count: number }>;
+  }> {
+    const params = new URLSearchParams();
+    if (options.object) params.set("object", options.object);
+    if (options.stage) params.set("stage", options.stage);
+    for (const d of options.domains ?? []) params.append("domains", d);
+    if (options.page) params.set("page", String(options.page));
+    if (options.limit) params.set("limit", String(options.limit));
+    return this.request("GET", `/agent/skills/tasks?${params}`);
+  }
+
   /** Get public catalog */
   async getPublicCatalog(options?: PublicCatalogOptions): Promise<PublicCatalogResult> {
     const params = new URLSearchParams();
     if (options?.sortBy) params.set("sortBy", options.sortBy);
     if (options?.limit) params.set("limit", String(options.limit));
-    if (options?.category) params.set("category", options.category);
     const query = params.toString();
     return this.request<PublicCatalogResult>("GET", `/public/catalog${query ? `?${query}` : ""}`);
   }
@@ -480,38 +508,18 @@ export class SciSkillHubClient {
     return this.request<StatsResult>("GET", "/stats");
   }
 
-  async listTags(subject?: string): Promise<CountedName[]> {
-    if (subject?.trim()) {
-      const resolvedSubject = await this.resolveSubjectName(subject);
-      return this.listTagsBySubject(resolvedSubject);
-    }
-
-    const stats = await this.getStats();
-    return stats.top_tags;
-  }
-
-  async listSubjects(): Promise<SubjectSummary[]> {
-    const response = await this.request<{ categories: SubjectSummary[] }>(
-      "GET",
-      "/categories"
-    );
-    return response.categories;
-  }
-
   async listCatalogSkills(options?: {
-    subject?: string;
-    tag?: string;
     query?: string;
     limit?: number;
+    object?: string[];
+    stage?: string[];
+    tasks?: string[];
+    domains?: string[];
+    sort?: string;
+    order?: "asc" | "desc";
   }): Promise<CatalogListResult["skills"]> {
     const limit = options?.limit ?? 20;
-    const subject = options?.subject?.trim()
-      ? await this.resolveSubjectName(options.subject)
-      : undefined;
-    const tag = options?.tag?.trim()
-      ? await this.resolveTagName(options.tag, subject)
-      : undefined;
-    const pageSize = 200;
+    const pageSize = 100;
     let offset = 0;
     const collected: CatalogListResult["skills"] = [];
 
@@ -520,8 +528,12 @@ export class SciSkillHubClient {
         limit: String(pageSize),
         offset: String(offset),
       });
-      if (subject) params.set("category", subject);
-      if (tag) params.set("tags", tag);
+      if (options?.sort) params.set("sort", options.sort);
+      if (options?.order) params.set("order", options.order);
+      for (const v of options?.object ?? []) params.append("object", v);
+      for (const v of options?.stage ?? []) params.append("stage", v);
+      for (const v of options?.tasks ?? []) params.append("tasks", v);
+      for (const v of options?.domains ?? []) params.append("domains", v);
 
       const response = await this.request<CatalogListResult>(
         "GET",
@@ -543,99 +555,6 @@ export class SciSkillHubClient {
 
     const filtered = filterCatalogSkills(collected, options?.query);
     return filtered.slice(0, limit);
-  }
-
-  private async listTagsBySubject(subjectName: string): Promise<CountedName[]> {
-    const counts = new Map<string, number>();
-    const pageSize = 200;
-    let offset = 0;
-
-    while (true) {
-      const params = new URLSearchParams({
-        category: subjectName,
-        limit: String(pageSize),
-        offset: String(offset),
-      });
-      const response = await this.request<CatalogListResult>(
-        "GET",
-        `/skills/catalog?${params}`
-      );
-
-      for (const skill of response.skills) {
-        for (const tag of skill.tags || []) {
-          counts.set(tag, (counts.get(tag) || 0) + 1);
-        }
-      }
-
-      if (!response.pagination?.has_more || response.skills.length === 0) {
-        break;
-      }
-
-      offset += response.skills.length;
-    }
-
-    return Array.from(counts.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  }
-
-  private async resolveSubjectName(subject: string): Promise<string> {
-    const requested = subject.trim().toLowerCase();
-    const subjects = await this.listSubjects();
-
-    const exactMatch = subjects.find((item) =>
-      item.name.toLowerCase() === requested ||
-      item.slug.toLowerCase() === requested
-    );
-    if (exactMatch) {
-      return exactMatch.name;
-    }
-
-    const partialMatches = subjects.filter((item) =>
-      item.name.toLowerCase().includes(requested) ||
-      item.slug.toLowerCase().includes(requested)
-    );
-
-    if (partialMatches.length === 1) {
-      return partialMatches[0].name;
-    }
-
-    if (partialMatches.length > 1) {
-      throw new Error(
-        `Subject "${subject}" is ambiguous: ${partialMatches.map((item) => item.name).join(", ")}`
-      );
-    }
-
-    throw new Error(`Unknown subject: ${subject}`);
-  }
-
-  private async resolveTagName(
-    tag: string,
-    subject?: string
-  ): Promise<string> {
-    const requested = tag.trim().toLowerCase();
-    const tags = await this.listTags(subject);
-
-    const exactMatch = tags.find((item) => item.name.toLowerCase() === requested);
-    if (exactMatch) {
-      return exactMatch.name;
-    }
-
-    const partialMatches = tags.filter((item) =>
-      item.name.toLowerCase().includes(requested)
-    );
-
-    if (partialMatches.length === 1) {
-      return partialMatches[0].name;
-    }
-
-    if (partialMatches.length > 1) {
-      throw new Error(
-        `Tag "${tag}" is ambiguous: ${partialMatches.map((item) => item.name).join(", ")}`
-      );
-    }
-
-    throw new Error(`Unknown tag: ${tag}`);
   }
 
   // ============================================
@@ -703,7 +622,6 @@ function scoreCatalogSkill(
   const name = skill.name.toLowerCase();
   const slug = skill.slug.toLowerCase();
   const description = (skill.description || "").toLowerCase();
-  const tags = (skill.tags || []).map((tag) => tag.toLowerCase());
 
   if (name === keyword || slug === keyword || slug.endsWith(`/${keyword}`)) {
     return 0;
@@ -717,12 +635,8 @@ function scoreCatalogSkill(
     return 2;
   }
 
-  if (tags.includes(keyword)) {
+  if (description.includes(keyword)) {
     return 3;
-  }
-
-  if (description.includes(keyword) || tags.some((tag) => tag.includes(keyword))) {
-    return 4;
   }
 
   return null;

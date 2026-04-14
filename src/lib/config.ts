@@ -190,8 +190,6 @@ export interface LocalSkillConfig {
   slug?: string;
   description?: string;
   description_zh?: string;
-  category?: string;
-  tags?: string[];
   visibility?: "private" | "unlisted" | "public";
   ignore?: string[];
 }

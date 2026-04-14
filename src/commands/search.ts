@@ -21,7 +21,6 @@ export function registerSearchCommand(program: Command): void {
     .alias("find")
     .description("Search for skills")
     .option("-l, --limit <n>", "Number of results", "10")
-    .option("-c, --category <cat>", "Filter by category")
     .option("--json", "Output as JSON")
     .action(async (query: string, options) => {
       const client = getClient();
@@ -30,10 +29,8 @@ export function registerSearchCommand(program: Command): void {
       const spin = spinner(`Searching for "${query}"...`);
 
       try {
-        // Use public API (no auth required)
         const results = await client.publicSearch(query, {
           limit,
-          category: options.category,
         });
 
         spin.stop();
@@ -42,7 +39,7 @@ export function registerSearchCommand(program: Command): void {
           info("No skills found matching your query.");
           console.log();
           info("Try different keywords or browse trending skills:");
-          console.log(`  ${colors.code("skillhub trending")}`);
+          console.log(`  ${colors.code("sciskill trending")}`);
           return;
         }
 
@@ -83,9 +80,9 @@ export function registerSearchCommand(program: Command): void {
         }));
 
         console.log();
-        info(`Install with: ${colors.code("sciskillhub install <author>/<path>")}`);
+        info(`Install with: ${colors.code("sciskill install <author>/<path>")}`);
         console.log();
-        info(`Example: ${colors.code(`sciskillhub install ${results[0]?.slug.split("/").slice(1).join("/")} --agent claude`)}`);
+        info(`Example: ${colors.code(`sciskill install ${results[0]?.slug.split("/").slice(1).join("/")} --agent claude`)}`);
         console.log();
 
       } catch (err) {

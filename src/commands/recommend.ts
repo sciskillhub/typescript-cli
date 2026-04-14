@@ -87,7 +87,7 @@ export function registerRecommendCommand(program: Command): void {
           info("No recommendations found. Try different criteria.");
           console.log();
           info("Browse all skills:");
-          console.log(`  ${colors.code("skillhub trending")}`);
+          console.log(`  ${colors.code("sciskill trending")}`);
           return;
         }
 
@@ -119,11 +119,11 @@ export function registerRecommendCommand(program: Command): void {
             console.log(`   ${colors.dim(desc)}`);
           }
           
-          console.log(`   ${colors.dim("Category:")} ${skill.category || "-"}  ${colors.success(matchPercent)}`);
+          console.log(`   ${colors.success(matchPercent)}`);
           console.log();
         }
 
-        info(`Install with: ${colors.code("skillhub install <slug>")}`);
+        info(`Install with: ${colors.code("sciskill install <slug>")}`);
         console.log();
 
       } catch (err) {

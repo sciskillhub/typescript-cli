@@ -1,96 +1,176 @@
 /**
  * List Command
- * 
- * List user's skills
+ *
+ * List locally installed skills (no auth required).
  */
 
 import { Command } from "commander";
-import { isLoggedIn } from "../lib/config.js";
-import { getClient, ensureAuthenticated } from "../lib/api.js";
-import { registerTagCommand } from "./tag.js";
-import { registerSubjectCommand } from "./subject.js";
-import { registerSkillCommand } from "./skill.js";
-import { 
-  success, 
-  error, 
-  info, 
-  spinner, 
-  colors,
-  formatTable,
-  formatStatus,
-  formatVisibility,
+import { AGENTS, type AgentKey, resolveAgentKey } from "./install.js";
+import {
+  listAgentSkills,
+  listAllAgentSkills,
+  formatBytes,
   formatDate,
+} from "../lib/installed.js";
+import {
+  colors,
+  error,
+  formatTable,
+  info,
 } from "../utils/ui.js";
 
 export function registerListCommand(program: Command): void {
-  const listCommand = program
+  program
     .command("list")
     .alias("ls")
-    .description("List your skills or browse metadata")
-    .option("-a, --all", "Show all details")
+    .description("List locally installed skills")
+    .option("-a, --agent <agent>", "Filter by agent (claude, cursor, codex, ...)")
+    .option("--project", "List project-level installs instead of personal")
+    .option("--json", "Output as JSON")
     .action(async (options) => {
-      // Check login
-      if (!isLoggedIn()) {
-        error("Not logged in. Run 'skillhub login' first.");
-        process.exit(1);
-      }
+      const scope: "personal" | "project" = options.project ? "project" : "personal";
 
-      ensureAuthenticated();
-      const client = getClient();
-
-      const spin = spinner("Fetching skills...");
-      try {
-        const skills = await client.listMySkills();
-        spin.stop();
-
-        if (skills.length === 0) {
-          info("No skills found.");
-          console.log();
-          info(`Run 'skillhub init' to create a new skill.`);
-          return;
+      if (options.agent) {
+        // List skills for a specific agent
+        const agentKey = resolveAgentKey(options.agent.toLowerCase());
+        if (!agentKey) {
+          error(`Unknown agent: ${options.agent}`);
+          console.log(`Supported agents: ${Object.keys(AGENTS).join(", ")}`);
+          process.exit(1);
         }
-
-        console.log();
-        console.log(colors.bold(`Your Skills (${skills.length}):`));
-        console.log();
-
-        if (options.all) {
-          // Detailed view
-          for (const skill of skills) {
-            console.log(colors.bold(skill.name));
-            console.log(formatTable([
-              [colors.dim("  Slug:"), skill.slug],
-              [colors.dim("  Status:"), formatStatus(skill.status)],
-              [colors.dim("  Visibility:"), formatVisibility(skill.visibility)],
-              [colors.dim("  Version:"), `v${skill.current_version}`],
-              [colors.dim("  Category:"), skill.category || "-"],
-              [colors.dim("  Updated:"), formatDate(skill.updated_at)],
-            ]));
-            console.log();
-          }
-        } else {
-          // Compact table view
-          const rows = skills.map((skill) => [
-            colors.bold(skill.name),
-            colors.dim(skill.slug),
-            formatStatus(skill.status),
-            `v${skill.current_version}`,
-            formatDate(skill.updated_at),
-          ]);
-
-          console.log(formatTable(rows, {
-            headers: ["Name", "Slug", "Status", "Version", "Updated"],
-          }));
-          console.log();
-        }
-      } catch (err) {
-        spin.stop();
-        error(err instanceof Error ? err.message : String(err));
-        process.exit(1);
+        listSingleAgent(agentKey, scope, options.json);
+      } else {
+        // List skills across all agents
+        listAllAgents(scope, options.json);
       }
     });
+}
 
-  registerTagCommand(listCommand);
-  registerSubjectCommand(listCommand);
-  registerSkillCommand(listCommand);
+function listSingleAgent(
+  agentKey: AgentKey,
+  scope: "personal" | "project",
+  json?: boolean
+): void {
+  const agent = AGENTS[agentKey];
+  const skills = listAgentSkills(agentKey, scope);
+
+  if (json) {
+    console.log(
+      JSON.stringify(
+        {
+          agent: agentKey,
+          scope,
+          skills: skills.map((s) => ({
+            name: s.name,
+            path: s.path,
+            hasSkillFile: s.hasSkillFile,
+            isSymlink: s.isSymlink,
+            storeTarget: s.storeTarget,
+            size: s.size,
+            modifiedAt: s.modifiedAt?.toISOString() || null,
+          })),
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  console.log();
+  console.log(colors.bold(`${agent.name} Installed Skills (${scope})`));
+  console.log();
+
+  if (skills.length === 0) {
+    info(`No skills installed for ${agent.name}.`);
+    console.log();
+    info(
+      `Install with: ${colors.code(`sciskill install <skill> --agent ${agentKey}`)}`
+    );
+    return;
+  }
+
+  const rows = skills.map((skill, idx) => [
+    colors.dim(`${idx + 1}.`),
+    colors.bold(skill.name),
+    skill.hasSkillFile ? colors.success("✓") : colors.warning("✗"),
+    skill.isSymlink ? colors.info("->") : " ",
+    formatBytes(skill.size),
+    skill.modifiedAt ? formatDate(skill.modifiedAt) : "-",
+  ]);
+
+  console.log(
+    formatTable(rows, {
+      headers: ["#", "Name", "Config", "Link", "Size", "Modified"],
+    })
+  );
+  console.log();
+  info(`Total: ${skills.length} skill${skills.length !== 1 ? "s" : ""}`);
+}
+
+function listAllAgents(
+  scope: "personal" | "project",
+  json?: boolean
+): void {
+  const allSkills = listAllAgentSkills(scope);
+
+  if (json) {
+    const result: Record<string, unknown[]> = {};
+    for (const [agentKey, skills] of allSkills) {
+      result[agentKey] = skills.map((s) => ({
+        name: s.name,
+        path: s.path,
+        hasSkillFile: s.hasSkillFile,
+        isSymlink: s.isSymlink,
+        storeTarget: s.storeTarget,
+        size: s.size,
+        modifiedAt: s.modifiedAt?.toISOString() || null,
+      }));
+    }
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (allSkills.size === 0) {
+    console.log();
+    info("No skills installed locally.");
+    console.log();
+    info(`Discover skills: ${colors.code("sciskill browse trending")}`);
+    info(
+      `Search skills:   ${colors.code("sciskill search <query>")}`
+    );
+    return;
+  }
+
+  console.log();
+  console.log(colors.bold(`Installed Skills (${scope})`));
+  console.log();
+
+  let totalSkills = 0;
+
+  for (const [agentKey, skills] of allSkills) {
+    const agent = AGENTS[agentKey];
+    totalSkills += skills.length;
+
+    console.log(colors.bold(`  ${agent.name} (${skills.length})`));
+
+    const rows = skills.map((skill, idx) => [
+      colors.dim(`    ${idx + 1}.`),
+      skill.name,
+      skill.hasSkillFile ? colors.success("✓") : colors.warning("✗"),
+      skill.isSymlink ? colors.info("->") : " ",
+      formatBytes(skill.size),
+    ]);
+
+    console.log(
+      formatTable(rows, {
+        headers: ["", "Name", "Config", "Link", "Size"],
+      })
+    );
+    console.log();
+  }
+
+  info(
+    `Total: ${totalSkills} skill${totalSkills !== 1 ? "s" : ""} across ${allSkills.size} agent${allSkills.size !== 1 ? "s" : ""}`
+  );
 }

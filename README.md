@@ -1,190 +1,181 @@
 # sciskillhub
 
-> **One-command install for AI agent skills** - Install skills to Claude, Cursor, Codex, and 10+ more agents instantly
+> **Discover and install AI agent skills for science** — Install skills to Claude, Cursor, Codex, and 40+ more agents instantly
 
 [![npm version](https://img.shields.io/npm/v/sciskillhub.svg)](https://www.npmjs.com/package/sciskillhub)
 [![npm downloads](https://img.shields.io/npm/dm/sciskillhub.svg)](https://www.npmjs.com/package/sciskillhub)
 
-## Quick Example: Single Cell Analysis
+**Package:** `sciskillhub` · **Command:** `sciskill`
+
+## Quick Example
 
 ```bash
-# 1. Search for single cell skills
-npx sciskillhub search "single cell"
+# 1. Browse skills by taxonomy
+sciskill tax                                            # View object / stage / domain options
+sciskill tax --tasks --object "Methods and Techniques" --stage "Data Analysis and Modeling" --domain "Life Sciences"
+sciskill browse skills --domain "Life Sciences" --task "Quality Control" "Clustering"
 
-# 2. Or browse by subject
-npx sciskillhub list skill --subject life-science
+# 2. Install a skill
+sciskill install scanpy --agent claude-code -y
 
-# 3. Install AnnData to Claude
-npx sciskillhub install anndata --agent claude -y
-
-# 4. Now Claude can help you analyze .h5ad files!
+# 3. Now your agent can use it!
 ```
 
 ## Installation
 
-### Option 1: Using npx (Recommended) ⭐
+### Option 1: Using npx (Recommended)
 
 ```bash
-npx sciskillhub install <skill-slug> --agent claude
+npx sciskillhub install <skill> --agent claude-code
 ```
 
-**Pros:** No installation, always latest version, works immediately
+No installation needed, always latest version.
 
-### Option 2: Global Installation
+### Option 2: Global Install
 
 ```bash
 npm install -g sciskillhub
-
-# Use shorter command
-sciskillhub install <skill-slug> --agent claude
+sciskill install <skill> --agent claude-code
 ```
 
-**Pros:** Faster, works offline, shorter command
+## Recommended Workflow
 
-## Usage Guide
+SciSkillHub uses a 4-level taxonomy (object → stage → domain → task) to organize skills. Follow this order to narrow down results:
 
-### Example: Complete Single Cell Workflow
-
-```bash
-# Step 1: Browse Life Science category
-npx sciskillhub list skill --subject life-science --limit 20
-
-# Step 2: Filter by tags
-npx sciskillhub list skill --subject life-science --tag "single cell"
-
-# Step 3: Search by keywords
-npx sciskillhub list skill --subject life-science --query "embedding"
-
-# Step 4: Install core tools (use short names!)
-npx sciskillhub install anndata --agent claude -y
-npx sciskillhub install scanpy --agent claude -y
-npx sciskillhub install scvi-tools --agent claude -y
-
-# Step 5: Use the skills in Claude
-# Prompt: "Help me analyze this h5ad file with scanpy"
-# Prompt: "Perform batch correction on my single-cell data using scvi-tools"
+```
+1. Judge 2-3 possible objects (e.g. Methods and Techniques + Software and Tools)
+2. Judge 1-2 possible stages (e.g. Data Analysis and Modeling)
+3. Judge domains (e.g. Life Sciences)
+4. Query tasks for each object+stage combination
+5. Query skills with selected tasks
+6. Install the best match
 ```
 
-### Popular Single Cell Skills
+**Try multiple object combinations** — many tasks span multiple dimensions. For example, "nanopore data analysis" involves both `Methods and Techniques` and `Software and Tools`.
 
-| Skill | Description | Slug |
-|-------|-------------|------|
-| **anndata** | Data structure for .h5ad files, scverse ecosystem | `anndata` |
-| **scanpy** | scRNA-seq pipeline: QC, clustering, markers | `scanpy` |
-| **scvi-tools** | Deep learning: batch correction, integration | `scvi-tools` |
-| **cellxgene-census** | Query 61M+ cells from CELLxGENE | `cellxgene-census` |
-| **scvelo** | RNA velocity for trajectory inference | `scvelo` |
-| **arboreto** | Gene regulatory networks (GRNBoost2) | `arboreto` |
+## Commands
 
-## All Commands
-
-### Discovery & Search
+### Discover & Install
 
 | Command | Description |
 |---------|-------------|
-| `search <query>` | Search skills by keywords `(s, find)` |
-| `trending` | Show trending skills `(hot, popular)` |
-| `latest` | Show recently added skills `(new, recent)` |
-| `recommend` | Get personalized recommendations `(rec, suggest)` |
-| `top` | Show all-time leaderboard `(leaderboard, rank)` |
-| `list skill --subject <name>` | Browse skills by subject |
-| `list skill --tag <tag>` | Filter by tag |
-| `list tag --subject <name>` | Show tags in a subject |
-| `list subject` | List all subjects |
+| `sciskill tax` | View taxonomy values (object, stage, domain) |
+| `sciskill tax --tasks --object X --stage Y --domain Z` | Query tasks by filters |
+| `sciskill tax --task-list` | View all task values |
+| `sciskill browse skills [options]` | Browse & filter skills by taxonomy |
+| `sciskill search <query>` | Search skills by keywords `(s, find)` |
+| `sciskill recommend` | Get personalized recommendations `(rec)` |
+| `sciskill install <skill> --agent <name>` | Install skill to agent `(i, add)` |
 
-### Install
+### Local Management
 
 | Command | Description |
 |---------|-------------|
-| `install <skill> --agent <name>` | Install skill to AI agent |
+| `sciskill list` | List locally installed skills `(ls)` |
+| `sciskill remove <skill>` | Remove an installed skill `(rm, uninstall)` |
+| `sciskill inspect` | Inspect skill in current directory |
+| `sciskill init` | Initialize a new skill project |
 
-**Smart Search:** Use short names like `anndata`, `scanpy`, `scvi-tools`. If multiple skills match, you'll be prompted to choose.
-
-**Supported Agents:** `claude`, `cursor`, `codex`, `gemini`, `copilot`, `windsurf`, `cline`, `roo`, `opencode`, `openclaw`, `junie`, `kiro`, `augment`, `warp`, `goose`
-
-### Management
+### Account
 
 | Command | Description |
 |---------|-------------|
-| `login` | Log in to SciSkillHub |
-| `init` | Create a new skill project |
-| `push` | Push local files to remote |
-| `publish` | Publish skill to public |
-| `status` | Check local vs remote status |
-| `list` | List your skills |
+| `sciskill login` | Log in to SciSkillHub |
+| `sciskill logout` | Log out |
+| `sciskill whoami` | Show current user |
 
-## Examples
-
-### Discovery Examples
+## Browse Skills Options
 
 ```bash
-# Search by keywords
-npx sciskillhub search "single cell"
-npx sciskillhub search "protein structure"
-
-# Browse by category
-npx sciskillhub list skill --subject life-science
-npx sciskillhub list skill --tag "genomics"
-
-# Discover popular skills
-npx sciskillhub trending --limit 10
-npx sciskillhub top --limit 20
-npx sciskillhub latest --limit 10
-
-# Get personalized recommendations
-npx sciskillhub recommend
+sciskill browse skills \
+  --object "Methods and Techniques" \
+  --stage "Data Analysis and Modeling" \
+  --task "Quality Control" "Alignment" \
+  --domain "Life Sciences" \
+  --sort name \
+  --limit 20
 ```
 
-### Install Examples
+| Option | Description |
+|--------|-------------|
+| `--object <values...>` | Filter by object |
+| `--stage <values...>` | Filter by stage |
+| `--task <values...>` | Filter by tasks |
+| `--domain <values...>` | Filter by domains |
+| `-q, --query <text>` | Additional keyword filter |
+| `--sort <field>` | Sort by: name, stars, recent, score |
+| `--order <dir>` | Sort order: asc, desc |
+| `-l, --limit <n>` | Number of results (default: 20) |
+| `--json` | JSON output |
 
-```bash
-# Install to Claude (personal)
-npx sciskillhub install <skill-slug> --agent claude -y
+## Supported Agents (45)
 
-# Install to Cursor (project-specific)
-npx sciskillhub install <skill-slug> --agent cursor --project
+| `--agent` | Agent | Global Path |
+|-----------|-------|-------------|
+| `claude-code` | Claude Code | `~/.claude/skills/` |
+| `cursor` | Cursor | `~/.cursor/skills/` |
+| `codex` | Codex | `~/.codex/skills/` |
+| `gemini-cli` | Gemini CLI | `~/.gemini/skills/` |
+| `github-copilot` | GitHub Copilot | `~/.copilot/skills/` |
+| `windsurf` | Windsurf | `~/.codeium/windsurf/skills/` |
+| `cline` | Cline | `~/.agents/skills/` |
+| `warp` | Warp | `~/.agents/skills/` |
+| `roo` | Roo Code | `~/.roo/skills/` |
+| `augment` | Augment | `~/.augment/skills/` |
+| `junie` | Junie | `~/.junie/skills/` |
+| `opencode` | OpenCode | `~/.config/opencode/skills/` |
+| `openclaw` | OpenClaw | `~/.openclaw/skills/` |
+| `goose` | Goose | `~/.config/goose/skills/` |
+| `amp` | Amp | `~/.config/agents/skills/` |
+| `kimi-cli` | Kimi Code CLI | `~/.config/agents/skills/` |
+| `replit` | Replit | `~/.config/agents/skills/` |
+| `antigravity` | Antigravity | `~/.gemini/antigravity/skills/` |
+| `bob` | IBM Bob | `~/.bob/skills/` |
+| `codebuddy` | CodeBuddy | `~/.codebuddy/skills/` |
+| `continue` | Continue | `~/.continue/skills/` |
+| `cortex` | Cortex Code | `~/.snowflake/cortex/skills/` |
+| `crush` | Crush | `~/.config/crush/skills/` |
+| `deepagents` | Deep Agents | `~/.deepagents/agent/skills/` |
+| `droid` | Droid | `~/.factory/skills/` |
+| `firebender` | Firebender | `~/.firebender/skills/` |
+| `iflow-cli` | iFlow CLI | `~/.iflow/skills/` |
+| `kilo` | Kilo Code | `~/.kilocode/skills/` |
+| `kiro-cli` | Kiro CLI | `~/.kiro/skills/` |
+| `kode` | Kode | `~/.kode/skills/` |
+| `mcpjam` | MCPJam | `~/.mcpjam/skills/` |
+| `mistral-vibe` | Mistral Vibe | `~/.vibe/skills/` |
+| `mux` | Mux | `~/.mux/skills/` |
+| `openhands` | OpenHands | `~/.openhands/skills/` |
+| `pi` | Pi | `~/.pi/agent/skills/` |
+| `qoder` | Qoder | `~/.qoder/skills/` |
+| `qwen-code` | Qwen Code | `~/.qwen/skills/` |
+| `trae` | Trae | `~/.trae/skills/` |
+| `trae-cn` | Trae CN | `~/.trae-cn/skills/` |
+| `zencoder` | Zencoder | `~/.zencoder/skills/` |
+| `neovate` | Neovate | `~/.neovate/skills/` |
+| `pochi` | Pochi | `~/.pochi/skills/` |
+| `adal` | AdaL | `~/.adal/skills/` |
+| `universal` | Universal | `~/.config/agents/skills/` |
+| `command-code` | Command Code | `~/.commandcode/skills/` |
 
-# Install with custom directory
-npx sciskillhub install <skill-slug> --agent claude -d /path/to/skills
-```
-
-## Why SciSkillHub CLI?
-
-- **One Command, Any Agent** - Install to 10+ AI agents with the same command
-- **Smart Filtering** - Browse by subject (学科) and tag (标签)
-- **Science-Focused** - Curated tools for Life Science, Chemistry, Physics
-- **Works Offline** - Install once, use anywhere
-- **Open Source** - MIT license, community driven
-
-## Configuration
-
-Config stored in `~/.skillhub/`:
-- `config.json` - API URL, default settings
-- `auth.json` - Secure authentication tokens
+**Backward-compatible aliases:** `claude` → `claude-code`, `gemini` → `gemini-cli`, `copilot` → `github-copilot`, `kiro` → `kiro-cli`
 
 ## Development
 
 ```bash
-# Clone
 git clone https://github.com/sciskillhub/typescript-cli.git
 cd typescript-cli
-
-# Install
 npm install
-
-# Build
 npm run build
-
-# Test
-npm run typecheck
+npm link   # makes 'sciskill' available globally
 ```
 
 ## Links
 
-- **Website**: https://sciskillhub.org
-- **npm**: https://www.npmjs.com/package/sciskillhub
-- **GitHub**: https://github.com/sciskillhub/typescript-cli
+- **Website:** https://sciskillhub.org
+- **npm:** https://www.npmjs.com/package/sciskillhub
+- **GitHub:** https://github.com/sciskillhub/typescript-cli
 
 ## License
 
-MIT © [SciSkillHub](https://sciskillhub.org)
+MIT
