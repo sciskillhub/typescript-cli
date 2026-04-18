@@ -29,6 +29,7 @@ import { homedir } from "os";
 import { promises as fsPromises } from "fs";
 import { getClient } from "../lib/api.js";
 import { getApiUrl } from "../lib/config.js";
+import type { SkillSuiteDetailResult } from "../lib/client.js";
 import {
   success,
   error,
@@ -41,6 +42,7 @@ import {
 
 // Central skill store path
 const SKILL_STORE = join(homedir(), ".sciskillhub", "skills");
+const SKILL_SUITE_STORE = join(homedir(), "sciskillhub", "skill-suites");
 
 // Supported agents with their install paths
 export const AGENTS = {
@@ -341,13 +343,14 @@ export function registerInstallCommand(program: Command): void {
     .command("install <skill>")
     .alias("add")
     .alias("i")
-    .description("Install a skill to your local agent")
+    .description("Install a skill or skill suite to your local agent")
     .option(
       "-a, --agent <agent>",
       "Target agent (claude, cursor, codex, gemini, copilot, windsurf, cline, roo, opencode, openclaw, junie, kiro, augment, warp, goose)"
     )
     .option("--project", "Install to project directory (default: personal)")
     .option("-d, --dir <path>", "Custom install directory")
+    .option("--suite", "Install a skill suite instead of a single skill")
     .option("-y, --yes", "Skip confirmation prompts")
     .option("--list-agents", "List all supported agents")
     .action(async (skill: string, options) => {
@@ -366,297 +369,303 @@ export function registerInstallCommand(program: Command): void {
     });
 }
 
+type InstallOptions = {
+  agent?: string;
+  project?: boolean;
+  dir?: string;
+  suite?: boolean;
+  yes?: boolean;
+};
+
+type ResolvedInstallTarget = {
+  agentKey: AgentKey | null;
+  linkBasePath: string | null;
+};
+
+type InstallResolution =
+  | {
+      kind: "skill";
+      slug: string;
+      name: string;
+    }
+  | {
+      kind: "suite";
+      suite: SkillSuiteDetailResult;
+    };
+
 async function installSkill(
   skillRef: string,
-  options: {
-    agent?: string;
-    project?: boolean;
-    dir?: string;
-    yes?: boolean;
-  }
+  options: InstallOptions
 ): Promise<void> {
   const client = getClient();
+  const resolution = await resolveInstallReference(client, skillRef, options);
+  const installTarget = await resolveInstallTarget(options);
 
-  // Track the skill to install
-  let skillSlug: string;
-  let skillName: string;
+  if (resolution.kind === "suite") {
+    await installSuite(resolution.suite, skillRef, options, installTarget);
+    return;
+  }
 
-  // Helper to try installing with different slug formats
-  async function tryInstall(slug: string): Promise<{ success: boolean; slug: string }> {
+  await installResolvedSkill(resolution, skillRef, options, installTarget);
+}
+
+function getCandidateSlugs(ref: string): string[] {
+  const candidates: string[] = [];
+  candidates.push(ref);
+
+  if (!ref.startsWith("open-source/") && !ref.startsWith("user-")) {
+    candidates.push(`open-source/${ref}`);
+  }
+
+  return candidates;
+}
+
+async function resolveInstallReference(
+  client: ReturnType<typeof getClient>,
+  skillRef: string,
+  options: InstallOptions,
+): Promise<InstallResolution> {
+  if (options.suite) {
+    const directSuite = await resolveSkillSuiteReference(client, skillRef, options, false);
+    if (directSuite) {
+      return { kind: "suite", suite: directSuite };
+    }
+
+    const searchedSuite = await resolveSkillSuiteReference(client, skillRef, options, true);
+    if (searchedSuite) {
+      return { kind: "suite", suite: searchedSuite };
+    }
+
+    error(`No suites found matching: ${skillRef}`);
+    console.log();
+    info(`Install a single skill without ${colors.code("--suite")}, or browse suites in the web catalog.`);
+    process.exit(1);
+  }
+
+  const directSkill = await resolveDirectSkillReference(client, skillRef);
+  if (directSkill) {
+    return directSkill;
+  }
+
+  const searchedSkill = await resolveSkillFromSearch(client, skillRef, options);
+  if (searchedSkill) {
+    return searchedSkill;
+  }
+
+  const directSuite = await resolveSkillSuiteReference(client, skillRef, options, false);
+  if (directSuite) {
+    return { kind: "suite", suite: directSuite };
+  }
+
+  const searchedSuite = await resolveSkillSuiteReference(client, skillRef, options, true);
+  if (searchedSuite) {
+    return { kind: "suite", suite: searchedSuite };
+  }
+
+  error(`No skills or suites found matching: ${skillRef}`);
+  console.log();
+  info("To search for skills, use:");
+  console.log(`  ${colors.code("sciskill search <query>")}`);
+  process.exit(1);
+}
+
+async function resolveDirectSkillReference(
+  client: ReturnType<typeof getClient>,
+  skillRef: string,
+): Promise<InstallResolution | null> {
+  async function tryInstall(slug: string): Promise<boolean> {
     try {
       await client.install(slug);
-      return { success: true, slug };
+      return true;
     } catch (err) {
       if (err instanceof Error && err.message.includes("404")) {
-        return { success: false, slug };
+        return false;
       }
       throw err;
     }
   }
 
-  // Generate candidate slugs to try
-  function getCandidateSlugs(ref: string): string[] {
-    const candidates: string[] = [];
-
-    // 1. Full slug as provided
-    candidates.push(ref);
-
-    // 2. Try adding open-source/ prefix (author/path -> open-source/author/path)
-    if (!ref.startsWith("open-source/") && !ref.startsWith("user-")) {
-      candidates.push(`open-source/${ref}`);
-    }
-
-    return candidates;
-  }
-
-  // First, try direct install with candidate slugs
-  const candidates = getCandidateSlugs(skillRef);
-  let foundSlug: string | null = null;
-
-  for (const candidate of candidates) {
+  for (const candidate of getCandidateSlugs(skillRef)) {
     const spin = spinner(`Trying ${colors.code(candidate)}...`);
-    const result = await tryInstall(candidate);
+    const successForCandidate = await tryInstall(candidate);
     spin.stop();
 
-    if (result.success) {
-      foundSlug = candidate;
-      break;
+    if (successForCandidate) {
+      return {
+        kind: "skill",
+        slug: candidate,
+        name: candidate.split("/").pop() || candidate,
+      };
     }
   }
 
-  if (foundSlug) {
-    skillSlug = foundSlug;
-    skillName = foundSlug.split("/").pop() || foundSlug;
-  } else {
-    // If direct install failed, search for matching skills
-    const searchSpin = spinner(`Searching for "${colors.code(skillRef)}"...`);
-    const allResults = await client.listCatalogSkills({
-      query: skillRef,
-      limit: 100,
-    });
-
-    // Filter results:
-    // 1. Exact name match, OR
-    // 2. Slug contains the ref (for partial path matching)
-    const refLower = skillRef.toLowerCase();
-    const matches = allResults.filter(skill => {
-      const nameMatch = skill.name.toLowerCase() === refLower;
-      const slugMatch = skill.slug.toLowerCase().includes(refLower);
-      const pathMatch = skill.slug.toLowerCase().endsWith(`/${refLower}`);
-      return nameMatch || slugMatch || pathMatch;
-    });
-
-    searchSpin.stop();
-
-    if (matches.length === 0) {
-      error(`No skills found matching: ${skillRef}`);
-      console.log();
-      info("To search for skills, use:");
-      console.log(`  ${colors.code("sciskill search <query>")}`);
-      process.exit(1);
-    }
-
-    let selectedSkill: typeof matches[0];
-
-    if (matches.length === 1) {
-      selectedSkill = matches[0];
-    } else {
-      // Multiple matches, let user choose
-      if (options.yes) {
-        error(`Multiple skills found matching "${skillRef}". Please run without -y flag to choose.`);
-        console.log();
-        for (const result of matches.slice(0, 10)) {
-          console.log(`  ${colors.code(result.slug)}`);
-          console.log(`    ${result.name}${result.description ? `: ${result.description.substring(0, 60)}...` : ""}`);
-        }
-        process.exit(1);
-      }
-
-      console.log();
-      console.log(colors.bold(`Found ${matches.length} skills matching "${skillRef}":`));
-      console.log();
-
-      const choices = matches.slice(0, 20).map((skill) => {
-        const parts = skill.slug.split("/");
-        const author = parts[1] || "";
-        const skillPath = parts.slice(2).join("/") || "";
-        return {
-          title: skill.name,
-          value: skill.slug,
-          description: `${author}/${skillPath}`,
-        };
-      });
-
-      const { selectedSlug } = await prompts({
-        type: "select",
-        name: "selectedSlug",
-        message: "Select a skill to install:",
-        choices,
-        initial: 0,
-      }, {
-        onCancel: () => {
-          info("Cancelled.");
-          process.exit(0);
-        },
-      });
-
-      selectedSkill = matches.find(s => s.slug === selectedSlug)!;
-    }
-
-    skillSlug = selectedSkill.slug;
-    skillName = selectedSkill.name;
-  }
-
-  console.log();
-  console.log(colors.bold(`📦 ${skillName}`));
-  console.log(colors.dim(`   ${skillSlug}`));
-  console.log();
-
-  // ── Step 1: Download to central store ──────────────────────────
-
-  const skillDirName = skillSlug.split("/").pop() || skillName;
-  const storeDir = join(SKILL_STORE, skillDirName);
-
-  // Check if already in central store
-  if (existsSync(storeDir)) {
-    const existingSkillFile = join(storeDir, "SKILL.md");
-    let isSameSkill = false;
-
-    if (existsSync(existingSkillFile)) {
-      try {
-        const content = readFileSync(existingSkillFile, "utf-8");
-        isSameSkill = content.includes(skillSlug) || content.includes(skillName);
-      } catch {}
-    }
-
-    if (isSameSkill) {
-      if (!options.yes) {
-        const { reinstall } = await prompts({
-          type: "confirm",
-          name: "reinstall",
-          message: `Skill "${skillName}" already in store. Re-download?`,
-          initial: false,
-        }, {
-          onCancel: () => { info("Cancelled."); process.exit(0); },
-        });
-
-        if (!reinstall) {
-          // Skip download, go straight to symlink
-          info("Using cached skill from store.");
-          await linkToAgent(skillDirName, storeDir, options);
-          return;
-        }
-      } else {
-        // -y mode: use cache automatically
-        info("Using cached skill from store.");
-        await linkToAgent(skillDirName, storeDir, options);
-        return;
-      }
-    }
-
-    if (!isSameSkill && !options.yes) {
-      warn(`A different skill named "${skillName}" already exists in store.`);
-      const { action } = await prompts({
-        type: "select",
-        name: "action",
-        message: "What would you like to do?",
-        choices: [
-          { title: "Overwrite existing skill", value: "overwrite" },
-          { title: "Cancel installation", value: "cancel" },
-        ],
-        initial: 1,
-      }, {
-        onCancel: () => { info("Cancelled."); process.exit(0); },
-      });
-
-      if (action === "cancel") {
-        info("Cancelled.");
-        return;
-      }
-    }
-  }
-
-  // Download skill content
-  const installSpin = spinner("Downloading skill content...");
-
-  const apiUrl = getApiUrl();
-  const downloadUrl = `${apiUrl}/download/${skillSlug}`;
-
-  let zipBuffer: Buffer;
-  try {
-    const response = await fetch(downloadUrl);
-    if (!response.ok) {
-      installSpin.stop();
-      error(`Failed to download skill: ${response.status} ${response.statusText}`);
-      process.exit(1);
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    zipBuffer = Buffer.from(arrayBuffer);
-  } catch (err) {
-    installSpin.stop();
-    if (err instanceof Error) {
-      error(`Failed to download skill: ${err.message}`);
-    } else {
-      error("Failed to download skill.");
-    }
-    process.exit(1);
-  }
-
-  installSpin.stop();
-
-  // Extract ZIP to central store
-  const extractSpin = spinner("Extracting skill files...");
-
-  const { execSync } = await import("child_process");
-  const tmpZipPath = join(SKILL_STORE, `.tmp_skill_${Date.now()}.zip`);
-
-  // Ensure store directory exists
-  mkdirSync(SKILL_STORE, { recursive: true });
-  writeFileSync(tmpZipPath, zipBuffer);
-
-  // Remove old skill dir if exists, then extract fresh
-  if (existsSync(storeDir)) {
-    rmSync(storeDir, { recursive: true, force: true });
-  }
-  mkdirSync(storeDir, { recursive: true });
-
-  try {
-    execSync(`unzip -o "${tmpZipPath}" -d "${storeDir}"`, { stdio: "ignore" });
-  } catch (err) {
-    extractSpin.stop();
-    error("Failed to extract skill files. Make sure 'unzip' command is available.");
-    process.exit(1);
-  }
-
-  // Clean up temp ZIP
-  fsPromises.unlink(tmpZipPath).catch(() => {});
-
-  extractSpin.stop();
-
-  success(`Downloaded ${colors.bold(skillName)} to store`);
-  console.log(colors.dim(`  Store: ${storeDir}`));
-  console.log();
-
-  // ── Step 2: Create symlink to agent directory ──────────────────
-
-  await linkToAgent(skillDirName, storeDir, options);
+  return null;
 }
 
-/**
- * Create a symlink from the agent's skill directory to the central store.
- * If no --agent is specified, only show store location and skip linking.
- */
-async function linkToAgent(
-  skillDirName: string,
-  storeDir: string,
-  options: {
-    agent?: string;
-    project?: boolean;
-    dir?: string;
-    yes?: boolean;
+async function resolveSkillFromSearch(
+  client: ReturnType<typeof getClient>,
+  skillRef: string,
+  options: InstallOptions,
+): Promise<InstallResolution | null> {
+  const searchSpin = spinner(`Searching skills for "${colors.code(skillRef)}"...`);
+  const allResults = await client.listCatalogSkills({
+    query: skillRef,
+    limit: 100,
+  });
+  searchSpin.stop();
+
+  const refLower = skillRef.toLowerCase();
+  const matches = allResults.filter(skill => {
+    const nameMatch = skill.name.toLowerCase() === refLower;
+    const slugMatch = skill.slug.toLowerCase().includes(refLower);
+    const pathMatch = skill.slug.toLowerCase().endsWith(`/${refLower}`);
+    return nameMatch || slugMatch || pathMatch;
+  });
+
+  if (matches.length === 0) {
+    return null;
   }
-): Promise<void> {
-  // Determine target agent
+
+  let selectedSkill: typeof matches[0];
+
+  if (matches.length === 1) {
+    selectedSkill = matches[0];
+  } else {
+    if (options.yes) {
+      error(`Multiple skills found matching "${skillRef}". Please run without -y flag to choose.`);
+      console.log();
+      for (const result of matches.slice(0, 10)) {
+        console.log(`  ${colors.code(result.slug)}`);
+        console.log(`    ${result.name}${result.description ? `: ${result.description.substring(0, 60)}...` : ""}`);
+      }
+      process.exit(1);
+    }
+
+    console.log();
+    console.log(colors.bold(`Found ${matches.length} skills matching "${skillRef}":`));
+    console.log();
+
+    const choices = matches.slice(0, 20).map((skill) => {
+      const parts = skill.slug.split("/");
+      const author = parts[1] || "";
+      const skillPath = parts.slice(2).join("/") || "";
+      return {
+        title: skill.name,
+        value: skill.slug,
+        description: `${author}/${skillPath}`,
+      };
+    });
+
+    const { selectedSlug } = await prompts({
+      type: "select",
+      name: "selectedSlug",
+      message: "Select a skill to install:",
+      choices,
+      initial: 0,
+    }, {
+      onCancel: () => {
+        info("Cancelled.");
+        process.exit(0);
+      },
+    });
+
+    selectedSkill = matches.find(s => s.slug === selectedSlug)!;
+  }
+
+  return {
+    kind: "skill",
+    slug: selectedSkill.slug,
+    name: selectedSkill.name,
+  };
+}
+
+async function resolveSkillSuiteReference(
+  client: ReturnType<typeof getClient>,
+  skillRef: string,
+  options: InstallOptions,
+  allowSearch: boolean,
+): Promise<SkillSuiteDetailResult | null> {
+  for (const candidate of getCandidateSlugs(skillRef)) {
+    const spin = spinner(`Checking suite ${colors.code(candidate)}...`);
+    try {
+      const suite = await client.getSkillSuite(candidate);
+      spin.stop();
+      return suite;
+    } catch (err) {
+      spin.stop();
+      if (!(err instanceof Error) || !err.message.includes("404")) {
+        throw err;
+      }
+    }
+  }
+
+  if (!allowSearch) {
+    return null;
+  }
+
+  const searchSpin = spinner(`Searching suites for "${colors.code(skillRef)}"...`);
+  const response = await client.listSkillSuites({
+    query: skillRef,
+    limit: 100,
+    sort: "skills",
+    order: "desc",
+  });
+  searchSpin.stop();
+
+  const refLower = skillRef.toLowerCase();
+  const matches = response.suites.filter((suite) => {
+    const idMatch = suite.id.toLowerCase().includes(refLower);
+    const titleMatch = suite.title.toLowerCase() === refLower || suite.title.toLowerCase().includes(refLower);
+    const pathMatch = suite.suitePath.toLowerCase() === refLower || suite.suitePath.toLowerCase().includes(refLower);
+    return idMatch || titleMatch || pathMatch;
+  });
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  let selectedSuite = matches[0];
+  if (matches.length > 1) {
+    if (options.yes) {
+      error(`Multiple suites found matching "${skillRef}". Please run without -y flag to choose.`);
+      console.log();
+      for (const suite of matches.slice(0, 10)) {
+        console.log(`  ${colors.code(suite.id)}`);
+        console.log(`    ${suite.title} (${suite.skillCount} skills)`);
+      }
+      process.exit(1);
+    }
+
+    console.log();
+    console.log(colors.bold(`Found ${matches.length} suites matching "${skillRef}":`));
+    console.log();
+
+    const choices = matches.slice(0, 20).map((suite) => ({
+      title: suite.title,
+      value: suite.id,
+      description: `${suite.repoLabel || suite.suitePath} · ${suite.skillCount} skills`,
+    }));
+
+    const { selectedSuiteId } = await prompts({
+      type: "select",
+      name: "selectedSuiteId",
+      message: "Select a suite to install:",
+      choices,
+      initial: 0,
+    }, {
+      onCancel: () => {
+        info("Cancelled.");
+        process.exit(0);
+      },
+    });
+
+    selectedSuite = matches.find((suite) => suite.id === selectedSuiteId)!;
+  }
+
+  return client.getSkillSuite(selectedSuite.id);
+}
+
+async function resolveInstallTarget(options: InstallOptions): Promise<ResolvedInstallTarget> {
   let targetAgent: AgentKey | null = null;
 
   if (options.agent) {
@@ -687,27 +696,14 @@ async function linkToAgent(
       onCancel: () => { info("Cancelled."); process.exit(0); },
     });
 
-    if (agent === "__skip__") {
-      targetAgent = null;
-    } else {
-      targetAgent = agent as AgentKey;
-    }
-  } else {
-    // Default with -y: download only, no linking
-    targetAgent = null;
+    targetAgent = agent === "__skip__" ? null : agent as AgentKey;
   }
 
   if (!targetAgent) {
-    console.log();
-    info("Skill downloaded to store. No agent linked.");
-    info(`To link to an agent: ${colors.code(`sciskill install ${skillDirName} --agent <agent>`)}`);
-    console.log();
-    return;
+    return { agentKey: null, linkBasePath: null };
   }
 
   const agent = AGENTS[targetAgent];
-
-  // Determine link location
   let linkBasePath: string;
 
   if (options.dir) {
@@ -743,16 +739,327 @@ async function linkToAgent(
     linkBasePath = join(homedir(), agent.personalPath);
   }
 
+  return {
+    agentKey: targetAgent,
+    linkBasePath,
+  };
+}
+
+async function installSuite(
+  suite: SkillSuiteDetailResult,
+  suiteRef: string,
+  options: InstallOptions,
+  installTarget: ResolvedInstallTarget,
+): Promise<void> {
+  const members = suite.members;
+  const suiteStoreDir = getSuiteStoreDir(suite.suite.id);
+  if (members.length === 0) {
+    error(`Suite "${suite.suite.title}" does not contain any installable skills.`);
+    process.exit(1);
+  }
+
+  console.log();
+  console.log(colors.bold(`📚 ${suite.suite.title}`));
+  console.log(colors.dim(`   ${suite.suite.id}`));
+  console.log(colors.dim(`   ${members.length} skills`));
+  console.log(colors.dim(`   Store: ${suiteStoreDir}`));
+  console.log();
+
+  await downloadSuiteToStore(suite.suite.id, suite.suite.title, options, suiteStoreDir);
+
+  for (const [index, member] of members.entries()) {
+    const skillDirName = member.id.split("/").pop() || member.name;
+    const memberStoreDir = getSuiteMemberStoreDir(suiteStoreDir, member.relativePath, skillDirName);
+
+    console.log(colors.dim(`[${index + 1}/${members.length}] ${member.relativePath || member.name}`));
+    console.log(colors.bold(`📦 ${member.name}`));
+    console.log(colors.dim(`   ${member.slug}`));
+    console.log(colors.dim(`   Store: ${memberStoreDir}`));
+    console.log();
+
+    if (!existsSync(memberStoreDir)) {
+      error(`Suite download is missing expected member directory: ${memberStoreDir}`);
+      process.exit(1);
+    }
+
+    if (installTarget.agentKey && installTarget.linkBasePath) {
+      await linkToAgent(skillDirName, memberStoreDir, installTarget, options);
+    }
+  }
+
+  console.log();
+  if (installTarget.agentKey) {
+    success(`Installed suite ${colors.bold(suite.suite.title)} (${members.length} skills)`);
+  } else {
+    success(`Downloaded suite ${colors.bold(suite.suite.title)} (${members.length} skills) to store`);
+    console.log(colors.dim(`  Store: ${suiteStoreDir}`));
+    info("No agent linked.");
+    info(`Re-run with ${colors.code(`sciskill install ${suiteRef} --agent <agent>`)} to link all suite skills.`);
+  }
+  console.log();
+}
+
+async function installResolvedSkill(
+  resolution: Extract<InstallResolution, { kind: "skill" }>,
+  originalRef: string,
+  options: InstallOptions,
+  installTarget: ResolvedInstallTarget,
+  behavior?: { suppressDownloadOnlyMessage?: boolean },
+): Promise<void> {
+  console.log();
+  console.log(colors.bold(`📦 ${resolution.name}`));
+  console.log(colors.dim(`   ${resolution.slug}`));
+  console.log();
+
+  const download = await downloadSkillToStore(resolution.slug, resolution.name, options);
+
+  if (installTarget.agentKey && installTarget.linkBasePath) {
+    await linkToAgent(download.skillDirName, download.storeDir, installTarget, options);
+    return;
+  }
+
+  if (!behavior?.suppressDownloadOnlyMessage) {
+    console.log();
+    info("Skill downloaded to store. No agent linked.");
+    info(`To link to an agent: ${colors.code(`sciskill install ${originalRef} --agent <agent>`)}`);
+    console.log();
+  }
+}
+
+async function downloadSkillToStore(
+  skillSlug: string,
+  skillName: string,
+  options: InstallOptions,
+): Promise<{ skillDirName: string; storeDir: string }> {
+  const skillDirName = skillSlug.split("/").pop() || skillName;
+  const storeRoot = SKILL_STORE;
+  const storeDir = join(storeRoot, skillDirName);
+
+  if (existsSync(storeDir)) {
+    const existingSkillFile = join(storeDir, "SKILL.md");
+    let isSameSkill = false;
+
+    if (existsSync(existingSkillFile)) {
+      try {
+        const content = readFileSync(existingSkillFile, "utf-8");
+        isSameSkill = content.includes(skillSlug) || content.includes(skillName);
+      } catch {}
+    }
+
+    if (isSameSkill) {
+      if (!options.yes) {
+        const { reinstall } = await prompts({
+          type: "confirm",
+          name: "reinstall",
+          message: `Skill "${skillName}" already in store. Re-download?`,
+          initial: false,
+        }, {
+          onCancel: () => { info("Cancelled."); process.exit(0); },
+        });
+
+        if (!reinstall) {
+          info("Using cached skill from store.");
+          return { skillDirName, storeDir };
+        }
+      } else {
+        info("Using cached skill from store.");
+        return { skillDirName, storeDir };
+      }
+    }
+
+    if (!isSameSkill && !options.yes) {
+      warn(`A different skill named "${skillName}" already exists in store.`);
+      const { action } = await prompts({
+        type: "select",
+        name: "action",
+        message: "What would you like to do?",
+        choices: [
+          { title: "Overwrite existing skill", value: "overwrite" },
+          { title: "Cancel installation", value: "cancel" },
+        ],
+        initial: 1,
+      }, {
+        onCancel: () => { info("Cancelled."); process.exit(0); },
+      });
+
+      if (action === "cancel") {
+        info("Cancelled.");
+        process.exit(0);
+      }
+    }
+  }
+
+  const installSpin = spinner("Downloading skill content...");
+  const apiUrl = getApiUrl();
+  const downloadUrl = `${apiUrl}/download/${skillSlug}`;
+
+  let zipBuffer: Buffer;
+  try {
+    const response = await fetch(downloadUrl);
+    if (!response.ok) {
+      installSpin.stop();
+      error(`Failed to download skill: ${response.status} ${response.statusText}`);
+      process.exit(1);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    zipBuffer = Buffer.from(arrayBuffer);
+  } catch (err) {
+    installSpin.stop();
+    if (err instanceof Error) {
+      error(`Failed to download skill: ${err.message}`);
+    } else {
+      error("Failed to download skill.");
+    }
+    process.exit(1);
+  }
+  installSpin.stop();
+  const extractSpin = spinner("Extracting skill files...");
+  const { execSync } = await import("child_process");
+  const tmpZipPath = join(storeRoot, `.tmp_skill_${Date.now()}.zip`);
+
+  mkdirSync(storeRoot, { recursive: true });
+  writeFileSync(tmpZipPath, zipBuffer);
+
+  if (existsSync(storeDir)) {
+    rmSync(storeDir, { recursive: true, force: true });
+  }
+  mkdirSync(storeDir, { recursive: true });
+
+  try {
+    execSync(`unzip -o "${tmpZipPath}" -d "${storeDir}"`, { stdio: "ignore" });
+  } catch (err) {
+    extractSpin.stop();
+    error("Failed to extract skill files. Make sure 'unzip' command is available.");
+    process.exit(1);
+  }
+
+  fsPromises.unlink(tmpZipPath).catch(() => {});
+  extractSpin.stop();
+  success(`Downloaded ${colors.bold(skillName)} to store`);
+  console.log(colors.dim(`  Store: ${storeDir}`));
+  console.log();
+  return { skillDirName, storeDir };
+}
+
+function getSuiteStoreDir(suiteId: string): string {
+  const suiteDirName = suiteId.split("/").filter(Boolean).pop() || suiteId;
+  return join(SKILL_SUITE_STORE, suiteDirName);
+}
+
+function getSuiteMemberStoreDir(suiteStoreDir: string, relativePath: string, fallbackDirName: string): string {
+  const segments = relativePath.split("/").filter(Boolean);
+  return segments.length > 0 ? join(suiteStoreDir, ...segments) : join(suiteStoreDir, fallbackDirName);
+}
+
+async function downloadSuiteToStore(
+  suiteId: string,
+  suiteTitle: string,
+  options: InstallOptions,
+  suiteStoreDir: string,
+): Promise<void> {
+  if (existsSync(suiteStoreDir)) {
+    if (!options.yes) {
+      const { reinstall } = await prompts({
+        type: "confirm",
+        name: "reinstall",
+        message: `Suite "${suiteTitle}" already in store. Re-download?`,
+        initial: false,
+      }, {
+        onCancel: () => { info("Cancelled."); process.exit(0); },
+      });
+
+      if (!reinstall) {
+        info("Using cached suite from store.");
+        return;
+      }
+    } else {
+      info("Using cached suite from store.");
+      return;
+    }
+  }
+
+  const installSpin = spinner("Downloading suite content...");
+  const apiUrl = getApiUrl();
+  const downloadUrl = `${apiUrl}/download-suite/${encodePathSegments(suiteId)}`;
+
+  let zipBuffer: Buffer;
+  try {
+    const response = await fetch(downloadUrl);
+    if (!response.ok) {
+      installSpin.stop();
+      error(`Failed to download suite: ${response.status} ${response.statusText}`);
+      process.exit(1);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    zipBuffer = Buffer.from(arrayBuffer);
+  } catch (err) {
+    installSpin.stop();
+    if (err instanceof Error) {
+      error(`Failed to download suite: ${err.message}`);
+    } else {
+      error("Failed to download suite.");
+    }
+    process.exit(1);
+  }
+  installSpin.stop();
+
+  const extractSpin = spinner("Extracting suite files...");
+  const { execSync } = await import("child_process");
+  const tmpZipPath = join(SKILL_SUITE_STORE, `.tmp_suite_${Date.now()}.zip`);
+
+  mkdirSync(SKILL_SUITE_STORE, { recursive: true });
+  writeFileSync(tmpZipPath, zipBuffer);
+
+  if (existsSync(suiteStoreDir)) {
+    rmSync(suiteStoreDir, { recursive: true, force: true });
+  }
+  mkdirSync(suiteStoreDir, { recursive: true });
+
+  try {
+    execSync(`unzip -o "${tmpZipPath}" -d "${suiteStoreDir}"`, { stdio: "ignore" });
+  } catch {
+    extractSpin.stop();
+    error("Failed to extract suite files. Make sure 'unzip' command is available.");
+    process.exit(1);
+  }
+
+  fsPromises.unlink(tmpZipPath).catch(() => {});
+  extractSpin.stop();
+  success(`Downloaded ${colors.bold(suiteTitle)} to suite store`);
+  console.log(colors.dim(`  Store: ${suiteStoreDir}`));
+  console.log();
+}
+
+function encodePathSegments(value: string): string {
+  return value
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+/**
+ * Create a symlink from the agent's skill directory to the central store.
+ */
+async function linkToAgent(
+  skillDirName: string,
+  storeDir: string,
+  installTarget: ResolvedInstallTarget,
+  options: InstallOptions,
+): Promise<void> {
+  const targetAgent = installTarget.agentKey;
+  const linkBasePath = installTarget.linkBasePath;
+  if (!targetAgent || !linkBasePath) {
+    return;
+  }
+  const agent = AGENTS[targetAgent];
   const linkPath = join(linkBasePath, skillDirName);
 
-  // Ensure the agent skill directory exists
   mkdirSync(linkBasePath, { recursive: true });
 
-  // Handle existing file/symlink/directory at link path
   if (existsSync(linkPath)) {
     const stat = lstatSync(linkPath);
     if (stat.isSymbolicLink()) {
-      // Check if it already points to the right target
       try {
         const currentTarget = readlinkSync(linkPath);
         if (currentTarget === storeDir) {
@@ -763,7 +1070,6 @@ async function linkToAgent(
       } catch {}
     }
 
-    // Remove existing and recreate
     if (!options.yes) {
       const { overwrite } = await prompts({
         type: "confirm",
@@ -780,7 +1086,6 @@ async function linkToAgent(
       }
     }
 
-    // Remove existing (file, dir, or symlink)
     if (stat.isDirectory() && !stat.isSymbolicLink()) {
       rmSync(linkPath, { recursive: true, force: true });
     } else {
@@ -788,9 +1093,7 @@ async function linkToAgent(
     }
   }
 
-  // Create the symlink
   symlinkSync(storeDir, linkPath);
-
   printSuccess(skillDirName, targetAgent, linkPath, storeDir);
 }
 

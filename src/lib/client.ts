@@ -198,6 +198,49 @@ export interface CatalogListResult {
   };
 }
 
+export interface SkillSuiteMember {
+  id: string;
+  slug: string;
+  name: string;
+  relativePath: string;
+  description: string | null;
+  githubUrl: string | null;
+  githubStars: number;
+  downloads: number;
+}
+
+export interface SkillSuiteSummary {
+  id: string;
+  title: string;
+  repoLabel: string | null;
+  suitePath: string;
+  domain: string | null;
+  workflow: string | null;
+  skillCount: number;
+  totalStars: number;
+  totalDownloads: number;
+  latestUpdatedAt: string | null;
+  topDomains: string[];
+  topTasks: string[];
+  githubUrl: string | null;
+  skills: SkillSuiteMember[];
+}
+
+export interface SkillSuiteListResult {
+  suites: SkillSuiteSummary[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
+}
+
+export interface SkillSuiteDetailResult {
+  suite: SkillSuiteSummary;
+  members: SkillSuiteMember[];
+}
+
 export interface PublicCatalogResult {
   trending: UserSkillSummary[];
   latest: UserSkillSummary[];
@@ -511,6 +554,7 @@ export class SciSkillHubClient {
   async listCatalogSkills(options?: {
     query?: string;
     limit?: number;
+    suite?: string;
     object?: string[];
     stage?: string[];
     tasks?: string[];
@@ -528,6 +572,7 @@ export class SciSkillHubClient {
         limit: String(pageSize),
         offset: String(offset),
       });
+      if (options?.suite) params.set("suite", options.suite);
       if (options?.sort) params.set("sort", options.sort);
       if (options?.order) params.set("order", options.order);
       for (const v of options?.object ?? []) params.append("object", v);
@@ -555,6 +600,36 @@ export class SciSkillHubClient {
 
     const filtered = filterCatalogSkills(collected, options?.query);
     return filtered.slice(0, limit);
+  }
+
+  async listSkillSuites(options?: {
+    query?: string;
+    limit?: number;
+    offset?: number;
+    domain?: string;
+    workflow?: string;
+    sort?: "name" | "recent" | "skills";
+    order?: "asc" | "desc";
+  }): Promise<SkillSuiteListResult> {
+    const params = new URLSearchParams();
+    if (options?.query) params.set("query", options.query);
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.offset) params.set("offset", String(options.offset));
+    if (options?.domain) params.set("domain", options.domain);
+    if (options?.workflow) params.set("workflow", options.workflow);
+    if (options?.sort) params.set("sort", options.sort);
+    if (options?.order) params.set("order", options.order);
+    return this.request<SkillSuiteListResult>(
+      "GET",
+      `/skill-suites${params.toString() ? `?${params.toString()}` : ""}`
+    );
+  }
+
+  async getSkillSuite(id: string): Promise<SkillSuiteDetailResult> {
+    return this.request<SkillSuiteDetailResult>(
+      "GET",
+      `/skill-suites/${encodePathSegments(id)}`
+    );
   }
 
   // ============================================
@@ -615,6 +690,14 @@ function filterCatalogSkills(
     .map((entry) => entry.skill);
 }
 
+function encodePathSegments(value: string): string {
+  return value
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
 function scoreCatalogSkill(
   skill: CatalogListResult["skills"][number],
   keyword: string
@@ -622,6 +705,7 @@ function scoreCatalogSkill(
   const name = skill.name.toLowerCase();
   const slug = skill.slug.toLowerCase();
   const description = (skill.description || "").toLowerCase();
+  const haystacks = [name, slug, description];
 
   if (name === keyword || slug === keyword || slug.endsWith(`/${keyword}`)) {
     return 0;
@@ -639,5 +723,58 @@ function scoreCatalogSkill(
     return 3;
   }
 
+  const tokens = keyword
+    .split(/[\s/,+-]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  let matched = 0;
+  let bestFieldScore = 99;
+
+  for (const token of tokens) {
+    const tokenScore = scoreSingleKeyword(haystacks, token);
+    if (tokenScore === null) {
+      continue;
+    }
+    matched += 1;
+    bestFieldScore = Math.min(bestFieldScore, tokenScore);
+  }
+
+  if (matched === 0) {
+    return null;
+  }
+
+  // Prefer skills matching more query terms, then prefer stronger fields.
+  return bestFieldScore + (tokens.length - matched) * 10;
+}
+
+function scoreSingleKeyword(haystacks: string[], token: string): number | null {
+  const [name, slug, description] = haystacks;
+
+  if (name === token || slug === token || slug.endsWith(`/${token}`)) {
+    return 0;
+  }
+
+  if (name.startsWith(token) || slug.includes(`/${token}`)) {
+    return 1;
+  }
+
+  if (name.includes(token) || slug.includes(token)) {
+    return 2;
+  }
+
+  if (description.includes(token)) {
+    return 3;
+  }
+
   return null;
 }
+
+export const __test__ = {
+  filterCatalogSkills,
+  scoreCatalogSkill,
+};

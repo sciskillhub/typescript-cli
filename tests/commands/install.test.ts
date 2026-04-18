@@ -79,6 +79,13 @@ describe("install command", () => {
     expect(yesOption).toBeDefined();
   });
 
+  test("has suite option", () => {
+    const command = program.commands.find((c) => c.name() === "install");
+    const options = command?.options || [];
+    const suiteOption = options.find((o) => o.long === "--suite");
+    expect(suiteOption).toBeDefined();
+  });
+
   test("has list-agents option", () => {
     const command = program.commands.find((c) => c.name() === "install");
     const options = command?.options || [];

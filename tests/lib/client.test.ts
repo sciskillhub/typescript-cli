@@ -8,15 +8,18 @@ import { SciSkillHubClient } from "../../src/lib/client.js";
 // Mock fetch globally
 const mockFetch = {
   responses: [] as Array<{ status: number; body?: unknown; error?: string }>,
+  lastUrl: "",
   clear() {
     this.responses = [];
+    this.lastUrl = "";
   },
   push(status: number, body?: unknown) {
     this.responses.push({ status, body });
   },
 };
 
-global.fetch = async (url: string, init?: RequestInit) => {
+global.fetch = async (url: string | URL, init?: RequestInit) => {
+  mockFetch.lastUrl = String(url);
   const response = mockFetch.responses.shift();
   if (!response) {
     throw new Error(`No mock response for ${url}`);
@@ -94,18 +97,99 @@ describe("SciSkillHubClient", () => {
       expect(result[0].name).toBe("skill1");
     });
 
-    test("listSubjects fetches categories", async () => {
-      const mockResponse = {
-        categories: [
-          { id: "1", name: "Life Science", slug: "life-science", skill_count: 10 },
-          { id: "2", name: "Chemistry", slug: "chemistry", skill_count: 5 },
+    test("listCatalogSkills forwards suite filter to the catalog endpoint", async () => {
+      mockFetch.push(200, {
+        skills: [],
+        pagination: { total: 0, limit: 100, offset: 0, has_more: false },
+      });
+
+      await client.listCatalogSkills({
+        suite: "open-source/Boom5426/Nature-Paper-Skills",
+        limit: 10,
+      });
+
+      expect(mockFetch.lastUrl).toContain("suite=open-source%2FBoom5426%2FNature-Paper-Skills");
+    });
+
+    test("getSkillSuite fetches suite detail by nested id", async () => {
+      mockFetch.push(200, {
+        suite: {
+          id: "open-source/Boom5426/Nature-Paper-Skills",
+          title: "Nature-Paper-Skills",
+          repoLabel: "Boom5426/Nature-Paper-Skills",
+          suitePath: "Nature-Paper-Skills",
+          domain: "Life Sciences",
+          workflow: "Scientific Writing Workflow",
+          skillCount: 2,
+          totalStars: 90,
+          totalDownloads: 20,
+          latestUpdatedAt: "2026-04-12T00:00:00.000Z",
+          topDomains: ["Life Sciences"],
+          topTasks: ["Routing"],
+          githubUrl: "https://github.com/Boom5426/nature-paper-skills",
+          skills: [],
+        },
+        members: [
+          {
+            id: "open-source/Boom5426/Nature-Paper-Skills/skills/core/paper-workflow",
+            slug: "open-source/Boom5426/Nature-Paper-Skills/skills/core/paper-workflow",
+            name: "paper-workflow",
+            relativePath: "skills/core/paper-workflow",
+            description: "Routes the next step",
+            githubUrl: "https://github.com/Boom5426/nature-paper-skills",
+            githubStars: 50,
+            downloads: 12,
+          },
         ],
+      });
+
+      const result = await client.getSkillSuite("open-source/Boom5426/Nature-Paper-Skills");
+      expect(result.suite.title).toBe("Nature-Paper-Skills");
+      expect(result.members[0]?.slug).toContain("paper-workflow");
+      expect(mockFetch.lastUrl).toContain("/skill-suites/open-source/Boom5426/Nature-Paper-Skills");
+    });
+
+    test("listSkillSuites fetches suite catalog", async () => {
+      mockFetch.push(200, {
+        suites: [
+          {
+            id: "open-source/Boom5426/Nature-Paper-Skills",
+            title: "Nature-Paper-Skills",
+            repoLabel: "Boom5426/Nature-Paper-Skills",
+            suitePath: "Nature-Paper-Skills",
+            domain: "Life Sciences",
+            workflow: "Scientific Writing Workflow",
+            skillCount: 12,
+            totalStars: 420,
+            totalDownloads: 88,
+            latestUpdatedAt: "2026-04-12T00:00:00.000Z",
+            topDomains: ["Life Sciences"],
+            topTasks: ["Routing"],
+            githubUrl: "https://github.com/Boom5426/nature-paper-skills",
+            skills: [],
+          },
+        ],
+        pagination: { total: 1, limit: 10, offset: 0, has_more: false },
+      });
+
+      const result = await client.listSkillSuites({ query: "nature", limit: 10 });
+      expect(result.suites).toHaveLength(1);
+      expect(result.suites[0]?.title).toBe("Nature-Paper-Skills");
+      expect(mockFetch.lastUrl).toContain("/skill-suites?query=nature&limit=10");
+    });
+
+    test("getTaxonomy fetches taxonomy options", async () => {
+      const mockResponse = {
+        object_options: ["Dataset", "Protocol"],
+        stage_options: ["Preprocessing", "Analysis"],
+        task_options: ["Clustering", "Annotation"],
+        domain_options: ["Life Sciences", "Chemistry"],
       };
       mockFetch.push(200, mockResponse);
 
-      const result = await client.listSubjects();
-      expect(result.length).toBe(2);
-      expect(result[0].name).toBe("Life Science");
+      const result = await client.getTaxonomy();
+      expect(result.object_options).toContain("Dataset");
+      expect(result.domain_options).toContain("Life Sciences");
     });
   });
 
