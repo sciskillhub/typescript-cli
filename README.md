@@ -18,7 +18,10 @@ sciskill browse skills --domain "Life Sciences" --task "Quality Control" "Cluste
 # 2. Install a skill
 sciskill install scanpy --agent claude-code -y
 
-# 3. Now your agent can use it!
+# 3. Install a skill suite
+sciskill install open-source/Boom5426/Nature-Paper-Skills --suite --agent codex -y
+
+# 4. Now your agent can use it!
 ```
 
 ## Installation
@@ -27,6 +30,7 @@ sciskill install scanpy --agent claude-code -y
 
 ```bash
 npx sciskillhub install <skill> --agent claude-code
+npx sciskillhub install <suite> --suite --agent codex
 ```
 
 No installation needed, always latest version.
@@ -36,6 +40,7 @@ No installation needed, always latest version.
 ```bash
 npm install -g sciskillhub
 sciskill install <skill> --agent claude-code
+sciskill install <suite> --suite --agent codex
 ```
 
 ## Recommended Workflow
@@ -65,7 +70,26 @@ SciSkillHub uses a 4-level taxonomy (object → stage → domain → task) to or
 | `sciskill browse skills [options]` | Browse & filter skills by taxonomy |
 | `sciskill search <query>` | Search skills by keywords `(s, find)` |
 | `sciskill recommend` | Get personalized recommendations `(rec)` |
-| `sciskill install <skill> --agent <name>` | Install skill to agent `(i, add)` |
+| `sciskill install <skill> --agent <name>` | Install a single skill to an agent `(i, add)` |
+| `sciskill install <suite> --suite --agent <name>` | Install a full skill suite to an agent |
+
+## Skill Suite Installation
+
+Use `--suite` when the target is a skill suite rather than a single skill.
+
+```bash
+# Install a suite and link all bundled skills into Codex
+sciskill install open-source/Boom5426/Nature-Paper-Skills --suite --agent codex
+
+# Download the suite only, without linking to an agent
+sciskill install open-source/Boom5426/Nature-Paper-Skills --suite
+```
+
+Current suite install behavior:
+
+- Downloads the suite as one zip archive from SciSkillHub
+- Extracts it into `~/sciskillhub/skill-suites/<suite-name>`
+- Creates per-skill symlinks into the selected agent's skill directory
 
 ### Local Management
 
